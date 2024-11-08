@@ -7,6 +7,24 @@ class KaviApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Placeholder();
   }
+
+  ThemeData themeFrom({required MaterialColor color}) {
+    return ThemeData(
+      splashColor: color.withOpacity(0.54),
+      highlightColor: color.withOpacity(0.36),
+      scaffoldBackgroundColor: color.shade50,
+      buttonTheme: const ButtonThemeData(
+        textTheme: ButtonTextTheme.primary,
+        height: 56,
+        minWidth: 240,
+      ),
+      textTheme: Typography.englishLike2018,
+      splashFactory: InkRipple.splashFactory,
+      bottomAppBarTheme: BottomAppBarTheme(color: color.shade200),
+      colorScheme: ColorScheme.fromSwatch(primarySwatch: color)
+          .copyWith(secondary: color),
+    );
+  }
 }
 
 var colorPalette = [
