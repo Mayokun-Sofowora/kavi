@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "111369795081",
+    "firebase_url": "https://kavi-a4f55-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "kavi-a4f55",
+    "storage_bucket": "kavi-a4f55.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111369795081:android:fb2d15ff98fcac775cead8",
+        "android_client_info": {
+          "package_name": "com.mayor.kavi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBism-bUKJfDkxr41QKXDV3jgbf-hUBhqY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
