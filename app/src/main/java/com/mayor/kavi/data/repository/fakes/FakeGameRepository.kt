@@ -1,171 +1,117 @@
 package com.mayor.kavi.data.repository.fakes
 
-import com.mayor.kavi.data.dao.PlayerStatsEntity
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.data.repository.GameRepository
-import com.mayor.kavi.data.models.Game
-import com.mayor.kavi.data.models.GameMode
-import com.mayor.kavi.data.models.GameType
-import com.mayor.kavi.data.models.PlayerStats
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
+import java.time.LocalDateTime
 
 class FakeGameRepository : GameRepository {
 
-    private val games = MutableStateFlow<List<Game>>(emptyList())
-    private val playerStatsMap =
-        mutableMapOf<String, PlayerStatsEntity>() // Simulating player stats storage
+    private val games = mutableListOf<GamesEntity>()
+    private val gameFlow = MutableStateFlow<List<GamesEntity>>(emptyList())
+    private val userStatistics = mutableMapOf<Long, UserStatisticsEntity>()
+    private var gameIdCounter = 1L
+    private var statisticsIdCounter = 1L
 
-    override fun getAllGames(): Flow<List<Game>> = games
+    override fun getAllGames(): Flow<List<GamesEntity>> {
+        return gameFlow.asStateFlow()
+    }
 
-    override suspend fun saveGame(game: Game) {
-        games.update { currentGames ->
-            val existingGame = currentGames.find { it.id == game.id }
-            if (existingGame != null) {
-                currentGames - existingGame + game
-            } else {
-                currentGames + game
-            }
+    override suspend fun saveGame(game: GamesEntity) {
+        val newGame = if (game.gameId == 0L) {
+            game.copy(gameId = gameIdCounter++)
+        } else {
+            game
         }
+        games.removeIf { it.gameId == newGame.gameId }
+        games.add(newGame)
+        emitGames()
     }
 
     override suspend fun deleteGame(gameId: Long) {
-        games.update { currentGames ->
-            currentGames.filterNot { it.id == gameId }
+        games.removeIf { it.gameId == gameId }
+        emitGames()
+    }
+
+    override suspend fun getGameById(gameId: Long): GamesEntity? {
+        return games.find { it.gameId == gameId }
+    }
+
+    override suspend fun getLatestGame(): GamesEntity? {
+        return games.maxByOrNull { it.createdAt }
+    }
+
+    override suspend fun countGamesByMode(mode: GameModes): Int {
+        return games.count { it.gameMode == mode }
+    }
+
+    override fun getGamesByMode(mode: GameModes): Flow<List<GamesEntity>> {
+        return flow {
+            emit(games.filter { it.gameMode == mode })
         }
     }
 
-    override suspend fun getGameById(gameId: Long): Game? {
-        return games.value.find { it.id == gameId }
+    override fun getGamesByType(type: GameTypes): Flow<List<GamesEntity>> {
+        return flow {
+            emit(games.filter { it.gameType == type })
+        }
     }
 
-    // New functions to implement the filtering functionality:
-
-    override suspend fun getLatestGame(): Game? {
-        return games.value.maxByOrNull { it.timestamp }
-    }
-
-    override suspend fun countGamesByMode(mode: GameMode): Int {
-        return games.value.count { it.gameMode == mode }
-    }
-
-    override fun getGamesByMode(mode: GameMode): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter { it.gameMode == mode })
-    }
-
-    override fun getGamesByType(type: GameType): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter { it.gameType == type })
-    }
-
-    override fun getGamesByPlayer(playerName: String): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter { playerName in it.players })
-    }
-
-    override fun getGamesByTimestampRange(startTime: Long, endTime: Long): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter { it.timestamp in startTime..endTime })
-    }
-
-    override fun getGamesByMultipleFilters(
-        mode: GameMode,
-        type: GameType,
+    override fun getGamesByModeAndType(
+        mode: GameModes,
+        type: GameTypes,
         playerName: String
-    ): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter {
-            it.gameMode == mode && it.gameType == type && playerName in it.players
-        })
-    }
-
-    override fun getGamesByPlayerAndMode(playerName: String, mode: GameMode): Flow<List<Game>> {
-        return MutableStateFlow(games.value.filter {
-            it.gameMode == mode && playerName in it.players
-        })
+    ): Flow<List<GamesEntity>> {
+        return flow {
+            emit(
+                games.filter {
+                    it.gameMode == mode && it.gameType == type
+                    // Assuming `players` is a property in the game entity,
+                    // replace `.players.contains(playerName)` with relevant logic if needed.
+                }
+            )
+        }
     }
 
     override suspend fun deletePlayerStats(playerName: String) {
-        games.update { currentGames ->
-            currentGames.map { game ->
-                game.copy(score = game.score.filterKeys { it != playerName })
-            }
+        val playerStat = userStatistics.values.find { it.userId.toString() == playerName }
+        playerStat?.let { userStatistics.remove(it.userId) }
+    }
+
+    override fun getPlayerStats(playerNames: List<String>): Flow<List<UserStatisticsEntity>> {
+        return flow {
+            emit(userStatistics.values.filter { playerNames.contains(it.userId.toString()) })
         }
     }
 
-    override fun getPlayerStats(playerNames: List<String>): Flow<PlayerStats> {
-        val relevantGames = games.value.filter { game ->
-            playerNames.any { it in game.players }
-        }
-
-        val totalGamesPlayed = relevantGames.size
-        val totalGamesWon = relevantGames.count { game ->
-            game.score.maxByOrNull { it.value }?.key in playerNames
-        }
-        val highestScore = relevantGames.flatMap { it.score.values }.maxOrNull() ?: 0
-        val averageScore = relevantGames.flatMap { it.score.values }.average()
-        val favoriteGameMode =
-            relevantGames.groupingBy { it.gameMode }.eachCount().maxByOrNull { it.value }?.key
-                ?: GameMode.CLASSIC
-
-        return MutableStateFlow(
-            PlayerStats(
-                playerId = playerNames.joinToString(","),
-                level = "Intermediate", // Default logic for demo
-                totalGamesPlayed = totalGamesPlayed,
-                totalGamesWon = totalGamesWon,
-                achievements = emptySet(),
-                highestScore = highestScore,
-                averageScore = averageScore,
-                favoriteGameMode = favoriteGameMode,
-                totalPlayTime = 0L // Placeholder for demo
-            )
+    override suspend fun updatePlayerStats(game: GamesEntity, playerId: Long, gameWon: Boolean) {
+        val stats = userStatistics[playerId] ?: UserStatisticsEntity(
+            userId = playerId,
+            totalGamesPlayed = 0,
+            totalGamesWon = 0,
+            totalGamesLost = 0,
+            statisticsId = statisticsIdCounter++,
+            level = UserLevel.BEGINNER,
+            actionType = ActionType.END_GAME,
+            achievements = emptySet(),
+            highestScore = 0,
+            averageScore = 0.0,
+            favoriteGameMode = game.gameMode,
+            totalPlayTime = 0L,
+            updatedAt = LocalDateTime.now()
         )
+
+        stats.totalGamesPlayed++
+        if (gameWon) stats.totalGamesWon++ else stats.totalGamesLost++
+        stats.updatedAt = LocalDateTime.now()
+
+        userStatistics[playerId] = stats
     }
 
-    override suspend fun updatePlayerStats(game: Game) {
-        // Update stats for each player in the game
-        game.score.forEach { (playerName, score) ->
-            // Check if player stats already exist
-            val existingStats = playerStatsMap[playerName]
-
-            if (existingStats != null) {
-                // If the player exists, update their statistics
-                val newTotalGamesPlayed = existingStats.totalGamesPlayed + 1
-                val newTotalGamesWon = if (game.isPlayerWinner(playerName)) {
-                    existingStats.totalGamesWon + 1
-                } else {
-                    existingStats.totalGamesWon
-                }
-                val newHighestScore = maxOf(existingStats.highestScore, score)
-                val newAverageScore =
-                    ((existingStats.averageScore * existingStats.totalGamesPlayed) + score) / newTotalGamesPlayed
-
-                // Update the player stats in the map
-                playerStatsMap[playerName] = existingStats.copy(
-                    totalGamesPlayed = newTotalGamesPlayed,
-                    totalGamesWon = newTotalGamesWon,
-                    highestScore = newHighestScore,
-                    averageScore = newAverageScore,
-                    favoriteGameMode = game.gameMode // You can adjust the logic for determining the favorite mode
-                )
-            } else {
-                // If no stats exist, create new PlayerStatsEntity
-                val newStats = PlayerStatsEntity(
-                    playerId = playerName,
-                    level = "Beginner", // Default logic, can be improved later
-                    totalGamesPlayed = 1,
-                    totalGamesWon = if (game.isPlayerWinner(playerName)) 1 else 0,
-                    highestScore = score,
-                    averageScore = score.toDouble(),
-                    favoriteGameMode = game.gameMode,
-                    totalPlayTime = 0L, // Placeholder for demo
-                    achievements = "" // TODO: Achievements logic can be added later
-                )
-                playerStatsMap[playerName] = newStats // Save new player stats in the map
-            }
-        }
+    private fun emitGames() {
+        gameFlow.value = games.toList()
     }
-
-    // TODO: Additional methods to retrieve player stats for testing purposes
-    fun getPlayerStats(playerName: String): PlayerStatsEntity? {
-        return playerStatsMap[playerName]
-    }
-
 }

@@ -1,58 +1,36 @@
 package com.mayor.kavi.data.dao
 
 import androidx.room.*
-import java.time.LocalDateTime
-import kotlinx.coroutines.flow.Flow
-import com.mayor.kavi.data.models.Friends
 import com.mayor.kavi.data.models.FriendStatus
-
-@Entity(
-    tableName = "friends",
-    foreignKeys = [
-        ForeignKey(
-            entity = Users::class,
-            parentColumns = ["userId"],
-            childColumns = ["userId"],
-            onDelete = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = Users::class,
-            parentColumns = ["userId"],
-            childColumns = ["friendUserId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ]
-)
-data class Friends(
-    @PrimaryKey(autoGenerate = true) val friendId: Long = 0,
-    @ColumnInfo(name = "user_id") val userId: Long,
-    @ColumnInfo(name = "friend_user_id") val friendUserId: Long,
-    val status: FriendStatus,
-    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime,
-    @ColumnInfo(name = "updated_at") val updatedAt: LocalDateTime
-)
+import com.mayor.kavi.data.models.FriendsEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FriendsDao {
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFriendship(friend: Friends)
-
-    @Query("SELECT * FROM friends WHERE user_id = :userId AND friend_user_id = :friendUserId")
-    suspend fun getFriendship(userId: Long, friendUserId: Long): Friends?
-
-    @Query("SELECT * FROM friends WHERE user_id = :userId AND status = :status")
-    fun getFriendsByStatus(userId: Long, status: FriendStatus): Flow<List<Friends>>
-
-    @Query("SELECT * FROM friends WHERE user_id = :userId OR friend_user_id = :userId")
-    fun getAllFriends(userId: Long): Flow<List<Friends>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // Handle upsert functionality
+    suspend fun insertFriend(friend: FriendsEntity)
 
     @Update
-    suspend fun updateFriendship(friend: Friends)
+    suspend fun updateFriend(friend: FriendsEntity)
 
     @Delete
-    suspend fun deleteFriendship(friend: Friends)
+    suspend fun deleteFriend(friend: FriendsEntity)
+
+    @Query("SELECT * FROM friends WHERE user_id = :userId")
+    suspend fun getFriendsForUser(userId: Long): List<FriendsEntity>
+
+    @Query("SELECT * FROM friends WHERE user_id = :userId AND status = :status")
+    fun getFriendsByStatus(
+        userId: Long,
+        status: FriendStatus
+    ): Flow<List<FriendsEntity>>
+
+    @Query("SELECT COUNT(*) FROM friends WHERE user_id = :userId")
+    suspend fun getCountOfFriends(userId: Long): Int
+
+    @Query("SELECT * FROM friends WHERE user_id = :userId AND friend_user_id = :friendUserId")
+    suspend fun getFriendship(userId: Long, friendUserId: Long): FriendsEntity?
 
     @Query("SELECT * FROM friends WHERE user_id = :userId OR friend_user_id = :userId")
-    fun getAllFriendships(userId: Long): Flow<List<Friends>>
+    fun getAllFriendships(userId: Long): Flow<List<FriendsEntity>> // Added method to get all friendships
 }

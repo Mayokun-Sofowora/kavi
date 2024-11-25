@@ -1,7 +1,6 @@
 package com.mayor.kavi.data.repository
 
-import com.mayor.kavi.data.dao.AchievementDao
-import com.mayor.kavi.data.dao.Achievements
+import com.mayor.kavi.data.dao.*
 import com.mayor.kavi.data.models.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -10,27 +9,39 @@ import javax.inject.Inject
 
 interface AchievementRepository {
 
-    fun getAllAchievements(): Flow<List<Achievement>>
+    fun getAllAchievements(): Flow<List<AchievementsEntity>>
 
-    suspend fun checkNewAchievements(game: Games, gameSession: GameSessions): List<Achievement>
+    suspend fun checkNewAchievements(
+        game: GamesEntity,
+        user: UsersEntity,
+        gameSession: GameSessionsEntity
+    ): List<AchievementsEntity>
 
     suspend fun unlockAchievement(achievementId: Long)
 
-    suspend fun getAchievementById(achievementId: Long): Achievement?
+    suspend fun getAchievementById(achievementId: Long): AchievementsEntity?
 
     suspend fun deleteAchievement(achievementId: Long)
 }
 
 class AchievementRepositoryImpl @Inject constructor(
-    private val achievementDao: AchievementDao
+    private val achievementDao: AchievementsDao,
+    private val friendsDao: FriendsDao
 ) : AchievementRepository {
 
+    // Helper function to get the friend count for a user
+    private suspend fun getFriendCount(userId: Long): Int {
+        // Use Flow to get the list of accepted friends
+        val acceptedFriendsFlow = friendsDao.getFriendsByStatus(userId, FriendStatus.ACCEPTED)
+        // Get the first value and return its size
+        return acceptedFriendsFlow.firstOrNull()?.size ?: 0
+    }
+
     // Get all achievements as a Flow
-    override fun getAllAchievements(): Flow<List<Achievement>> {
+    override fun getAllAchievements(): Flow<List<AchievementsEntity>> {
         return achievementDao.getAllAchievements().map { entities ->
-            // Map AchievementEntity to Achievement
             entities.map {
-                Achievement(
+                AchievementsEntity(
                     it.achievementId,
                     it.userId,
                     it.name,
@@ -44,12 +55,17 @@ class AchievementRepositoryImpl @Inject constructor(
 
     // Check new achievements based on the current game and session
     override suspend fun checkNewAchievements(
-        game: Games,
-        gameSession: GameSessions
-    ): List<Achievement> {
+        game: GamesEntity,
+        user: UsersEntity,
+        gameSession: GameSessionsEntity
+    ): List<AchievementsEntity> {
+
+        val userId = user.userId
+        val friendCount = getFriendCount(userId)
+
         // Fetch all achievements and map to Achievement
         val achievements = achievementDao.getAllAchievements().firstOrNull()?.map {
-            Achievement(
+            AchievementsEntity(
                 it.achievementId,
                 it.userId,
                 it.name,
@@ -59,7 +75,7 @@ class AchievementRepositoryImpl @Inject constructor(
             )
         } ?: emptyList()
 
-        val unlockedAchievements = mutableListOf<Achievement>()
+        val unlockedAchievements = mutableListOf<AchievementsEntity>()
 
         // Helper function to process achievement unlocking
         suspend fun unlockAchievement(achievementName: String) {
@@ -67,7 +83,7 @@ class AchievementRepositoryImpl @Inject constructor(
             achievement?.let {
                 if (!it.unlocked) {
                     achievementDao.insertAchievement(
-                        Achievements(
+                        AchievementsEntity(
                             it.achievementId,
                             it.userId,
                             it.name,
@@ -101,9 +117,7 @@ class AchievementRepositoryImpl @Inject constructor(
         if (gameSession.scores.values.any { it >= 100 }) unlockAchievement("Century Club")
 
         // 6. Multiplayer Champion Achievement
-        if (game.players.size >= 3 && game.gameType == GameTypes.LOCAL_MULTIPLAYER) unlockAchievement(
-            "Party Master"
-        )
+        if (friendCount >= 5) unlockAchievement("Party Master")
 
         // 7. AI Challenger Achievement
         if (game.gameType == GameTypes.COMPUTER_AI) unlockAchievement("AI Challenger")
@@ -138,9 +152,7 @@ class AchievementRepositoryImpl @Inject constructor(
         )
 
         // 15. Social Butterfly Achievement
-        if (game.players.size >= 4 && game.gameType == GameTypes.LOCAL_MULTIPLAYER) unlockAchievement(
-            "Social Butterfly"
-        )
+        if (friendCount >= 25) unlockAchievement("Social Butterfly")
 
         return unlockedAchievements
     }
@@ -155,10 +167,10 @@ class AchievementRepositoryImpl @Inject constructor(
     }
 
     // Get an achievement by its ID
-    override suspend fun getAchievementById(achievementId: Long): Achievement? {
+    override suspend fun getAchievementById(achievementId: Long): AchievementsEntity? {
         val achievementEntity = achievementDao.getAchievementById(achievementId)
         return achievementEntity?.let {
-            Achievement(
+            AchievementsEntity(
                 it.achievementId,
                 it.userId,
                 it.name,

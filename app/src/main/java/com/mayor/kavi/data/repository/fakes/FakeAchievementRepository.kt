@@ -1,65 +1,94 @@
 package com.mayor.kavi.data.repository.fakes
 
-import com.mayor.kavi.data.models.Achievement
-import com.mayor.kavi.data.models.Game
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.data.repository.AchievementRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.mayor.kavi.R
 
 class FakeAchievementRepository : AchievementRepository {
 
-    private val achievements = mutableListOf(
-        Achievement(1, "Perfect Score", "Achieve a perfect score", false),
-        Achievement(2, "Image Recognition Master", "Master the image recognition mode", false),
-        Achievement(3, "Roll Master", "Use all rolls", false)
-    )
+    private val achievements = mutableListOf<AchievementsEntity>()
+    private val achievementsFlow = MutableStateFlow<List<AchievementsEntity>>(emptyList())
+    private var achievementIdCounter = 1L
 
-    private val unlockedAchievements = mutableListOf<Long>()
-
-    override fun getAllAchievements(): Flow<List<Achievement>> {
-        return flow {
-            emit(achievements.map {
-                if (unlockedAchievements.contains(it.id)) {
-                    it.copy(isUnlocked = true)
-                } else {
-                    it
-                }
-            })
-        }
+    override fun getAllAchievements(): Flow<List<AchievementsEntity>> {
+        return achievementsFlow
     }
 
-    override suspend fun checkNewAchievements(game: Game): List<Achievement> {
-        val unlocked = mutableListOf<Achievement>()
+    override suspend fun checkNewAchievements(
+        game: GamesEntity,
+        user: UsersEntity,
+        gameSession: GameSessionsEntity
+    ): List<AchievementsEntity> {
+        val newAchievements = mutableListOf<AchievementsEntity>()
 
-        // Example logic for unlocking an achievement (based on game)
-        if (game.score.values.contains(50)) {
-            unlocked.add(Achievement(1, "Perfect Score", "Achieve a perfect score", true))
+        // Helper function to unlock achievements
+        fun unlockAchievement(name: String, description: String, iconResource: Int) {
+            val existing = achievements.find { it.name == name && it.userId == user.userId }
+            if (existing == null) {
+                val achievement = AchievementsEntity(
+                    achievementId = achievementIdCounter++,
+                    userId = user.userId,
+                    name = name,
+                    description = description,
+                    unlocked = true,
+                    iconResource = iconResource,
+                )
+                achievements.add(achievement)
+                newAchievements.add(achievement)
+                emitAchievements()
+            }
         }
 
-        // Add to unlockedAchievements for persistence simulation
-        unlocked.forEach {
-            unlockedAchievements.add(it.id)
+        // Sample logic to unlock achievements based on conditions
+        if (gameSession.scores.values.contains(50)) {
+            unlockAchievement(
+                "Perfect Score",
+                "Achieve a perfect score in a session.",
+                R.drawable.logo // TODO: Replace
+            )
         }
 
-        return unlocked
+        if (gameSession.rolledDice.count { it.value == 6 } >= 3) {
+            unlockAchievement(
+                "Triple Sixes",
+                "Roll three or more sixes in a session.",
+                R.drawable.logo // TODO: Replace
+            )
+        }
+
+        if (gameSession.rolledDice.isNotEmpty() && gameSession.rolledDice.all { it.value == 6 }) {
+            unlockAchievement(
+                "Image Recognition Master",
+                "Achieve mastery in dice recognition.",
+                R.drawable.logo // TODO: Replace
+            )
+        }
+
+        return newAchievements
     }
 
     override suspend fun unlockAchievement(achievementId: Long) {
-        unlockedAchievements.add(achievementId)
-    }
-
-    override suspend fun getAchievementById(achievementId: Long): Achievement? {
-        return achievements.find { it.id == achievementId }?.let {
-            if (unlockedAchievements.contains(it.id)) {
-                it.copy(isUnlocked = true)
-            } else {
-                it
-            }
+        val achievement = achievements.find { it.achievementId == achievementId }
+        achievement?.let {
+            val updated = it.copy(unlocked = true)
+            achievements.remove(it)
+            achievements.add(updated)
+            emitAchievements()
         }
     }
 
+    override suspend fun getAchievementById(achievementId: Long): AchievementsEntity? {
+        return achievements.find { it.achievementId == achievementId }
+    }
+
     override suspend fun deleteAchievement(achievementId: Long) {
-        achievements.removeAll { it.id == achievementId }
-        unlockedAchievements.remove(achievementId)
+        achievements.removeIf { it.achievementId == achievementId }
+        emitAchievements()
+    }
+
+    private fun emitAchievements() {
+        achievementsFlow.value = achievements.toList()
     }
 }

@@ -3,14 +3,7 @@ package com.mayor.kavi.utils
 import androidx.room.TypeConverter
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.mayor.kavi.data.models.ScoreType
-import com.mayor.kavi.data.models.UserLevel
-import com.mayor.kavi.data.models.Users
-import com.mayor.kavi.data.models.GameTypes
-import com.mayor.kavi.data.models.GameModes
-import com.mayor.kavi.data.models.ActionType
-import com.mayor.kavi.data.models.Achievement
-import com.mayor.kavi.data.models.Dice
+import com.mayor.kavi.data.models.*
 import java.time.LocalDateTime
 
 /**
@@ -68,92 +61,103 @@ class MyTypeConverters {
 
     // For List<Users>
     @TypeConverter
-    fun fromUsersList(users: List<Users>?): String? {
+    fun fromUsersList(users: List<UsersEntity>?): String? {
         return if (users == null) null else gson.toJson(users)
     }
 
     @TypeConverter
-    fun toUsersList(usersString: String?): List<Users>? {
+    fun toUsersList(usersString: String?): List<UsersEntity>? {
         return if (usersString == null) null else gson.fromJson(
             usersString,
-            object : TypeToken<List<Users>>() {}.type
+            object : TypeToken<List<UsersEntity>>() {}.type
         )
     }
 
     // For Set<Achievement>
     @TypeConverter
-    fun fromAchievementSet(value: Set<Achievement>?): String? {
+    fun fromAchievementSet(value: Set<AchievementsEntity>?): String? {
         return gson.toJson(value)
     }
 
     @TypeConverter
-    fun toAchievementSet(value: String?): Set<Achievement>? {
+    fun toAchievementSet(value: String?): Set<AchievementsEntity>? {
         return value?.let {
-            val type = object : TypeToken<Set<Achievement>>() {}.type
+            val type = object : TypeToken<Set<AchievementsEntity>>() {}.type
             gson.fromJson(it, type)
         }
     }
 
-    // For Enums (Specific to ScoreType)
-    @TypeConverter
-    fun fromScoreTypeToString(value: ScoreType?): String? {
-        return value?.name
-    }
-
-    @TypeConverter
-    fun fromStringToScoreType(value: String?): ScoreType? {
-        return value?.let { ScoreType.valueOf(it) }
-    }
-
-    // For Enums (Specific to GameTypes)
-    @TypeConverter
-    fun fromGameTypeToString(value: GameTypes?): String? {
-        return value?.name
-    }
-
-    @TypeConverter
-    fun fromStringToGameType(value: String?): GameTypes? {
-        return value?.let { GameTypes.valueOf(it) }
-    }
-
-    // For Enums (Specific to GameModes)
-    @TypeConverter
-    fun fromGameModeToString(value: GameModes?): String? {
-        return value?.name
-    }
-
-    @TypeConverter
-    fun toGameMode(value: String?): GameModes? {
-        return value?.let { GameModes.valueOf(it) }
-    }
-
-    // For Enums (Specific to UserLevel)
-    @TypeConverter
-    fun fromUserLevelToString(value: UserLevel?): String? {
-        return value?.name
-    }
-
-    @TypeConverter
-    fun toUserLevel(value: String?): UserLevel? {
-        return value?.let { UserLevel.valueOf(it) }
-    }
-
-    // For Enums (Specific to ActionType)
-    @TypeConverter
-    fun fromActionTypeToString(value: ActionType?): String? {
-        return value?.name
-    }
-
-    @TypeConverter
-    fun toActionType(value: String?): ActionType? {
-        return value?.let { ActionType.valueOf(it) }
-    }
-
-    // For LocalDateTime
-    @TypeConverter
-    fun fromLocalDateTime(value: LocalDateTime?): Long? {
-        return value?.atZone(java.time.ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-    }
+//    // For Enums (Specific to ScoreType)
+//    @TypeConverter
+//    fun fromScoreTypeToString(value: ScoreType?): String? {
+//        return value?.name
+//    }
+//
+//    @TypeConverter
+//    fun fromStringToScoreType(value: String?): ScoreType? {
+//        return value?.let { ScoreType.valueOf(it) }
+//    }
+//
+//    // For Enums (Specific to GameTypes)
+//    @TypeConverter
+//    fun fromGameTypeToString(value: GameTypes?): String? {
+//        return value?.name
+//    }
+//
+//    @TypeConverter
+//    fun fromStringToGameType(value: String?): GameTypes? {
+//        return value?.let { GameTypes.valueOf(it) }
+//    }
+//
+//    // For Enums (Specific to GameModes)
+//    @TypeConverter
+//    fun fromGameModeToString(value: GameModes?): String? {
+//        return value?.name
+//    }
+//
+//    @TypeConverter
+//    fun toGameMode(value: String?): GameModes? {
+//        return value?.let { GameModes.valueOf(it) }
+//    }
+//
+//    // For Enums (Specific to UserLevel)
+//    @TypeConverter
+//    fun fromUserLevelToString(value: UserLevel?): String? {
+//        return value?.name
+//    }
+//
+//    @TypeConverter
+//    fun toUserLevel(value: String?): UserLevel? {
+//        return value?.let { UserLevel.valueOf(it) }
+//    }
+//
+//    // For Enums (Specific to ActionType)
+//    @TypeConverter
+//    fun fromActionTypeToString(value: ActionType?): String? {
+//        return value?.name
+//    }
+//
+//    // For Enums (Specific to FriendStatus)
+//    @TypeConverter
+//    fun fromFriendStatusToString(value: FriendStatus?): String? {
+//        return value?.name
+//    }
+//
+//    @TypeConverter
+//    fun fromStringToFriendStatus(value: String?): FriendStatus? {
+//        return value?.let { FriendStatus.valueOf(it) }
+//    }
+//
+//    @TypeConverter
+//    fun toActionType(value: String?): ActionType? {
+//        return value?.let { ActionType.valueOf(it) }
+//    }
+//
+//    // For LocalDateTime
+//    @TypeConverter
+//    fun fromLocalDateTime(value: LocalDateTime?): Long? {
+//        return value?.atZone(java.time.ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+//    }
 
     @TypeConverter
     fun toLocalDateTime(value: Long?): LocalDateTime? {

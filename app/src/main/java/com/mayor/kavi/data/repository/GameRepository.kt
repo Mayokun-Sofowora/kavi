@@ -1,66 +1,55 @@
 package com.mayor.kavi.data.repository
 
-import com.mayor.kavi.data.dao.GameDao
-import com.mayor.kavi.data.dao.UserStatisticsDao
-import com.mayor.kavi.data.dao.Games
-import com.mayor.kavi.data.dao.UserDao
-import com.mayor.kavi.data.models.GameModes
-import com.mayor.kavi.data.models.GameTypes
-import com.mayor.kavi.data.dao.UserStatistics
+import com.mayor.kavi.data.dao.*
+import com.mayor.kavi.data.models.*
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 interface GameRepository {
 
-    fun getAllGames(): Flow<List<Games>>
+    fun getAllGames(): Flow<List<GamesEntity>>
 
-    suspend fun saveGame(game: Games)
+    suspend fun saveGame(game: GamesEntity)
 
     suspend fun deleteGame(gameId: Long)
 
-    suspend fun getGameById(gameId: Long): Games?
+    suspend fun getGameById(gameId: Long): GamesEntity?
 
-    suspend fun getLatestGame(): Games?
+    suspend fun getLatestGame(): GamesEntity?
 
     suspend fun countGamesByMode(mode: GameModes): Int
 
-    fun getGamesByMode(mode: GameModes): Flow<List<Games>>
+    fun getGamesByMode(mode: GameModes): Flow<List<GamesEntity>>
 
-    fun getGamesByType(type: GameTypes): Flow<List<Games>>
+    fun getGamesByType(type: GameTypes): Flow<List<GamesEntity>>
 
-    fun getGamesByPlayer(playerName: String): Flow<List<Games>>
-
-    fun getGamesByTimestampRange(startTime: Long, endTime: Long): Flow<List<Games>>
-
-    fun getGamesByMultipleFilters(
+    fun getGamesByModeAndType(
         mode: GameModes,
         type: GameTypes,
         playerName: String
-    ): Flow<List<Games>>
-
-    fun getGamesByPlayerAndMode(playerName: String, mode: GameModes): Flow<List<Games>>
+    ): Flow<List<GamesEntity>>
 
     suspend fun deletePlayerStats(playerName: String)
 
-    fun getPlayerStats(playerNames: List<String>): Flow<List<UserStatistics>>
+    fun getPlayerStats(playerNames: List<String>): Flow<List<UserStatisticsEntity>>
 
-    suspend fun updatePlayerStats(game: Games, playerId: Long, gameWon: Boolean)
+    suspend fun updatePlayerStats(game: GamesEntity, playerId: Long, gameWon: Boolean)
 }
 
 class GameRepositoryImpl @Inject constructor(
-    private val gameDao: GameDao,
-    private val userDao: UserDao,
+    private val gameDao: GamesDao,
+    private val userDao: UsersDao,
     private val userStatisticsDao: UserStatisticsDao
 ) : GameRepository {
 
-    override fun getAllGames(): Flow<List<Games>> {
+    override fun getAllGames(): Flow<List<GamesEntity>> {
         return flow {
             emit(gameDao.getAllGames())
         }
     }
 
-    override suspend fun saveGame(game: Games) {
+    override suspend fun saveGame(game: GamesEntity) {
         gameDao.insertGame(game)
     }
 
@@ -69,61 +58,44 @@ class GameRepositoryImpl @Inject constructor(
         game?.let { gameDao.deleteGame(it) }
     }
 
-    override suspend fun getGameById(gameId: Long): Games? {
+    override suspend fun getGameById(gameId: Long): GamesEntity? {
         return gameDao.getGameById(gameId)
     }
 
-    override suspend fun getLatestGame(): Games? {
+    override suspend fun getLatestGame(): GamesEntity? {
         val allGames = gameDao.getAllGames()
         return allGames.lastOrNull()
     }
 
     override suspend fun countGamesByMode(mode: GameModes): Int {
         val games = gameDao.getGamesByMode(mode)
-        return games.size
+        return games.size // Emitting count of games
     }
 
-    override fun getGamesByMode(mode: GameModes): Flow<List<Games>> {
+    override fun getGamesByMode(mode: GameModes): Flow<List<GamesEntity>> {
         return flow {
             emit(gameDao.getGamesByMode(mode))
         }
     }
 
-    override fun getGamesByType(type: GameTypes): Flow<List<Games>> {
+    override fun getGamesByType(type: GameTypes): Flow<List<GamesEntity>> {
         return flow {
             emit(gameDao.getGamesByType(type))
         }
     }
 
-    override fun getGamesByPlayer(playerName: String): Flow<List<Games>> {
-        return flow {
-            emit(gameDao.getGamesByPlayer(playerName))
-        }
-    }
-
-    override fun getGamesByTimestampRange(startTime: Long, endTime: Long): Flow<List<Games>> {
-        return flow {
-            emit(gameDao.getGamesByTimestampRange(startTime, endTime))
-        }
-    }
-
-    override fun getGamesByMultipleFilters(
+    override fun getGamesByModeAndType(
         mode: GameModes,
         type: GameTypes,
         playerName: String
-    ): Flow<List<Games>> {
+    ): Flow<List<GamesEntity>> {
         return flow {
-            val games =
-                gameDao.getGamesByMode(mode) + gameDao.getGamesByType(type) + gameDao.getGamesByPlayer(
-                    playerName
-                )
-            emit(games.distinct())  // Avoid duplicates
-        }
-    }
+            val gamesByMode = gameDao.getGamesByMode(mode)
+            val gamesByType = gameDao.getGamesByType(type)
 
-    override fun getGamesByPlayerAndMode(playerName: String, mode: GameModes): Flow<List<Games>> {
-        return flow {
-            emit(gameDao.getGamesByPlayer(playerName).filter { it.gameMode == mode })
+            // Combine and eliminate duplicates
+            val combinedGames = (gamesByMode + gamesByType).distinct()
+            emit(combinedGames)
         }
     }
 
@@ -135,13 +107,12 @@ class GameRepositoryImpl @Inject constructor(
         userStat?.let { userStatisticsDao.deleteStatistics(it) }
     }
 
-    override fun getPlayerStats(playerNames: List<String>): Flow<List<UserStatistics>> = flow {
-        val userStats =
-            playerNames.mapNotNull { userStatisticsDao.getStatisticsByUserId(it.toLong()) }
+    override fun getPlayerStats(playerNames: List<String>): Flow<List<UserStatisticsEntity>> = flow {
+        val userStats = playerNames.mapNotNull { userStatisticsDao.getStatisticsByUserId(it.toLong()) }
         emit(userStats)
     }
 
-    override suspend fun updatePlayerStats(game: Games, playerId: Long, gameWon: Boolean) {
+    override suspend fun updatePlayerStats(game: GamesEntity, playerId: Long, gameWon: Boolean) {
         // Fetch user and user statistics
         val user = userDao.getUserById(playerId)
         val userStat = userStatisticsDao.getStatisticsByUserId(playerId)

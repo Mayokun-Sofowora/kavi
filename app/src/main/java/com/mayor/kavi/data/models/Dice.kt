@@ -3,22 +3,6 @@ package com.mayor.kavi.data.models
 import java.time.LocalDateTime
 import kotlin.random.Random
 
-enum class Dice(val value: Int) {
-    ONE(1),
-    TWO(2),
-    THREE(3),
-    FOUR(4),
-    FIVE(5),
-    SIX(6);
-
-    companion object {
-        // Converts a list of integers to corresponding dice values
-        fun from(integers: List<Int>): List<Dice> {
-            return integers.map { num -> Dice.entries[num - 1] }
-        }
-    }
-}
-
 //data class DicePool(
 //    val poolId: Long,
 //    val gameId: Long,

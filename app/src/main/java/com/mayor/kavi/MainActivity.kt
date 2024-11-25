@@ -72,11 +72,6 @@ fun AppNavigation(userViewModel: UserViewModel, modifier: Modifier = Modifier) {
         composable(route = "arMode") {
             VirtualMode(navController)
         }
-        composable(route = "leaderboard") {
-            val leaderboardViewModel: LeaderboardViewModel =
-                hiltViewModel()
-            LeaderboardScreen(navController, leaderboardViewModel)
-        }
         composable(route = "gameScene") {
             val userViewModel: UserViewModel = hiltViewModel()
             GameScene(navController, userViewModel)

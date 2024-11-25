@@ -1,40 +1,28 @@
 package com.mayor.kavi.data.dao
 
 import androidx.room.*
-import java.time.LocalDateTime
-
-@Entity(
-    tableName = "game_results",
-    foreignKeys = [
-        ForeignKey(
-            entity = GameSessions::class,
-            parentColumns = ["sessionId"],
-            childColumns = ["sessionId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ]
-)
-data class GameResults(
-    @PrimaryKey(autoGenerate = true) val resultId: Long = 0,
-    @ColumnInfo(name = "session_id") val sessionId: Long,
-    @ColumnInfo(name = "final_score") val finalScore: String,
-    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime
-)
+import com.mayor.kavi.data.models.GameResultsEntity
 
 @Dao
 interface GameResultsDao {
     @Insert
-    suspend fun insertResult(result: GameResults)
+    suspend fun insertGameResult(gameResult: GameResultsEntity)
 
     @Update
-    suspend fun updateResult(result: GameResults)
+    suspend fun updateGameResult(gameResult: GameResultsEntity)
 
     @Delete
-    suspend fun deleteResult(result: GameResults)
-
-    @Query("SELECT * FROM game_results WHERE resultId = :resultId")
-    suspend fun getResultById(resultId: Long): GameResults?
+    suspend fun deleteGameResult(gameResult: GameResultsEntity)
 
     @Query("SELECT * FROM game_results WHERE session_id = :sessionId")
-    suspend fun getResultsBySessionId(sessionId: Long): List<GameResults>
+    suspend fun getResultsBySession(sessionId: Long): List<GameResultsEntity>
+
+    @Query("SELECT * FROM game_results WHERE resultId = :resultId")
+    suspend fun getResultById(resultId: Long): GameResultsEntity?
+
+    @Query("SELECT * FROM game_results WHERE created_at BETWEEN :startTime AND :endTime")
+    suspend fun getResultsByTimestampRange(startTime: Long, endTime: Long): List<GameResultsEntity>
+
+    @Query("SELECT * FROM game_results WHERE final_score LIKE '%' || :playerName || '%'")
+    suspend fun getResultsByPlayer(playerName: String): List<GameResultsEntity>
 }

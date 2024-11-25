@@ -1,52 +1,113 @@
 package com.mayor.kavi.data.repository.fakes
 
-import android.content.Context
-import android.content.SharedPreferences
-import javax.inject.Inject
+import com.mayor.kavi.data.models.UserSettingsEntity
+import com.mayor.kavi.data.repository.UserSettingsRepository
+import java.time.LocalDateTime
 
-// Interface for SettingsRepository
-interface SettingsRepository {
-    fun isSoundEnabled(): Boolean
-    fun setSoundEnabled(enabled: Boolean)
-    fun isNotificationsEnabled(): Boolean
-    fun setNotificationsEnabled(enabled: Boolean)
-    fun getSelectedTheme(): String
-    fun setSelectedTheme(theme: String)
-}
+class FakeUserSettingsRepository : UserSettingsRepository {
 
-// Implementation of SettingsRepository
-class SettingsRepositoryImpl @Inject constructor(context: Context) : SettingsRepository {
+    // In-memory storage for user settings
+    private val userSettingsMap = mutableMapOf<Long, MutableList<UserSettingsEntity>>()
 
-    private val sharedPreferences: SharedPreferences =
-        context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-
-    // Check if sound is enabled
-    override fun isSoundEnabled(): Boolean {
-        return sharedPreferences.getBoolean("sound_enabled", true)
+    // General CRUD operations
+    override suspend fun saveOrUpdateSetting(userId: Long, key: String, value: String) {
+        val existingSetting = getSettingByKey(key)
+        if (existingSetting != null && existingSetting.userId == userId) {
+            // Update existing setting
+            val updatedSetting = existingSetting.copy(
+                settingsValue = value,
+                updatedAt = LocalDateTime.now()
+            )
+            deleteSetting(existingSetting)
+            insertSetting(updatedSetting)
+        } else {
+            // Insert new setting
+            val newSetting = UserSettingsEntity(
+                userId = userId,
+                settingsKey = key,
+                settingsValue = value,
+                updatedAt = LocalDateTime.now()
+            )
+            insertSetting(newSetting)
+        }
     }
 
-    // Set sound enabled or disabled
-    override fun setSoundEnabled(enabled: Boolean) {
-        sharedPreferences.edit().putBoolean("sound_enabled", enabled).apply()
+    override suspend fun getSettingsByUserId(userId: Long): List<UserSettingsEntity> {
+        return userSettingsMap[userId]?.toList() ?: emptyList()
     }
 
-    // Check if notifications are enabled
-    override fun isNotificationsEnabled(): Boolean {
-        return sharedPreferences.getBoolean("notifications_enabled", true)
+    override suspend fun getSettingByKey(key: String): UserSettingsEntity? {
+        return userSettingsMap.values.flatten().find { it.settingsKey == key }
     }
 
-    // Set notifications enabled or disabled
-    override fun setNotificationsEnabled(enabled: Boolean) {
-        sharedPreferences.edit().putBoolean("notifications_enabled", enabled).apply()
+    override suspend fun deleteSetting(settings: UserSettingsEntity) {
+        userSettingsMap[settings.userId]?.remove(settings)
     }
 
-    // Get the selected theme (e.g., "Light" or "Dark")
-    override fun getSelectedTheme(): String {
-        return sharedPreferences.getString("selected_theme", "Light") ?: "Light"
+    override suspend fun deleteSettingsByUserId(userId: Long) {
+        userSettingsMap.remove(userId)
     }
 
-    // Set the selected theme (e.g., "Light" or "Dark")
-    override fun setSelectedTheme(theme: String) {
-        sharedPreferences.edit().putString("selected_theme", theme).apply()
+    // Game Use Case Functions
+    override suspend fun getPreferredGameMode(userId: Long): String? {
+        return getSettingByKey("preferred_game_mode")?.settingsValue
+    }
+
+    override suspend fun setPreferredGameMode(userId: Long, gameMode: String) {
+        saveOrUpdateSetting(userId, "preferred_game_mode", gameMode)
+    }
+
+    override suspend fun getThemePreference(userId: Long): String? {
+        return getSettingByKey("theme")?.settingsValue
+    }
+
+    override suspend fun setThemePreference(userId: Long, theme: String) {
+        saveOrUpdateSetting(userId, "theme", theme)
+    }
+
+    override suspend fun isARToggleEnabled(userId: Long): Boolean {
+        return getSettingByKey("ar_toggle")?.settingsValue?.toBoolean() == true
+    }
+
+    override suspend fun setARToggle(userId: Long, isEnabled: Boolean) {
+        saveOrUpdateSetting(userId, "ar_toggle", isEnabled.toString())
+    }
+
+    override suspend fun getSoundSettings(userId: Long): String? {
+        return getSettingByKey("sound_settings")?.settingsValue
+    }
+
+    override suspend fun setSoundSettings(userId: Long, soundLevel: String) {
+        saveOrUpdateSetting(userId, "sound_settings", soundLevel)
+    }
+
+    override suspend fun getDiceStylePreference(userId: Long): String? {
+        return getSettingByKey("dice_style")?.settingsValue
+    }
+
+    override suspend fun setDiceStylePreference(userId: Long, diceStyle: String) {
+        saveOrUpdateSetting(userId, "dice_style", diceStyle)
+    }
+
+    override suspend fun getAIDifficulty(userId: Long): String? {
+        return getSettingByKey("ai_difficulty")?.settingsValue
+    }
+
+    override suspend fun setAIDifficulty(userId: Long, difficulty: String) {
+        saveOrUpdateSetting(userId, "ai_difficulty", difficulty)
+    }
+
+    override suspend fun isPerformanceAnalyticsEnabled(userId: Long): Boolean {
+        return getSettingByKey("performance_analytics")?.settingsValue?.toBoolean() == true
+    }
+
+    override suspend fun setPerformanceAnalytics(userId: Long, isEnabled: Boolean) {
+        saveOrUpdateSetting(userId, "performance_analytics", isEnabled.toString())
+    }
+
+    // Helper function to insert a setting for a user
+    private suspend fun insertSetting(setting: UserSettingsEntity) {
+        val userSettings = userSettingsMap.getOrPut(setting.userId) { mutableListOf() }
+        userSettings.add(setting)
     }
 }

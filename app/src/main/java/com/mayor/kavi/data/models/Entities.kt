@@ -1,89 +1,26 @@
 package com.mayor.kavi.data.models
 
+import androidx.room.*
+import com.mayor.kavi.utils.MyTypeConverters
 import java.time.LocalDateTime
-
-// User data class holding essential user details.
-data class Users(
-    val userId: Long,
-    val username: String,
-    val email: String,
-    val passwordHash: String,
-    val createdAt: Long,
-    val updatedAt: Long
-)
-
-// Game data class holding all information about one game instance.
-data class Games(
-    val gameId: Long,
-    val gameType: GameTypes,
-    val gameMode: GameModes,
-    val players: List<Users>,
-    val minPlayers: Int,
-    val maxPlayers: Int,
-    val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
-)
 
 // Enum representing different types of games.
 enum class GameTypes {
-    LOCAL_MULTIPLAYER, // Local multiplayer
-    COMPUTER_AI, // Against an AI
-    // ONLINE_MULTIPLAYER // Online multiplayer (future feature)
+    LOCAL_MULTIPLAYER,
+    COMPUTER_AI,
+    // ONLINE_MULTIPLAYER
 }
 
 // Enum for the game mode of the different gameplay mechanics.
 enum class GameModes {
-    CLASSIC, // Traditional dice rolling
-    VIRTUAL, // Includes image recognition and AR features
+    CLASSIC,
+    VIRTUAL,
 }
 
-// Game session data class tracking each individual game session.
-data class GameSessions(
-    val sessionId: Long,
-    val gameId: Long,
-    val playerId: Long,
-    val scores: Map<ScoreType, Int>,
-    val rolledDice: List<Dice>,
-    val sessionStart: LocalDateTime,
-    val sessionEnd: LocalDateTime?
-)
-
-// Game result data class storing results for each game session.
-data class GameResults(
-    val resultId: Long,
-    val sessionId: Long,
-    val finalScore: Map<String, Int>,
-    val createdAt: LocalDateTime
-)
-
-// User settings data class for managing user preferences.
-data class UserSettings(
-    val settingsId: Long,
-    val userId: Long,
-    val settingsKey: String,
-    val settingsValue: String,
-    val updatedAt: LocalDateTime
-)
-
-// User statistics data class for tracking individual user performance.
-data class UserStatistics(
-    val statisticsId: Long,
-    val userId: Long,
-    val level: UserLevel, // Level of the player (Beginner, Intermediate, Expert)
-    val actionType: ActionType,
-    val totalGamesPlayed: Int,
-    val totalGamesWon: Int,
-    val totalGamesLost: Int,
-    val achievements: Set<Achievement>,
-    val highestScore: Int,
-    val averageScore: Double,
-    val favoriteGameMode: GameModes,
-    val totalPlayTime: Long, // Total time spent playing the game (in milliseconds)
-    val updatedAt: LocalDateTime
-)
-
 enum class UserLevel {
-    BEGINNER, INTERMEDIATE, EXPERT
+    BEGINNER,
+    INTERMEDIATE,
+    EXPERT
 }
 
 enum class ActionType {
@@ -97,36 +34,215 @@ enum class ActionType {
     DECLINE_INVITE
 }
 
-// Achievement class for tracking user achievements.
-data class Achievement(
-    val achievementId: Long,
-    val userId: Long,
-    val name: String,
-    val description: String,
-    val unlocked: Boolean,
-    val iconResource: Int
-)
-
-data class Friends(
-    val friendId: Long,
-    val userId: Long,
-    val friendUserId: Long,
-    val status: FriendStatus,
-    val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
-)
-
 enum class FriendStatus {
     PENDING,
     ACCEPTED,
     BLOCKED
 }
 
-// Future Entities (for AI Models, AR Assets, etc.) will be similarly defined.
-// Simplified database definitions:
-// 1. Users
-// 2. Dice
-// 3. Games
-// 4. Game Sessions
-// 5. Game Results
-// More entities to be added based on the project requirements.
+enum class Dice(val value: Int) {
+    ONE(1),
+    TWO(2),
+    THREE(3),
+    FOUR(4),
+    FIVE(5),
+    SIX(6);
+
+    companion object {
+        // Converts a list of integers to corresponding dice values
+        fun from(integers: List<Int>): List<Dice> {
+            return integers.map { num -> Dice.entries[num - 1] }
+        }
+    }
+}
+
+// User data class holding essential user details.
+@Entity(tableName = "users")
+data class UsersEntity(
+    @PrimaryKey(autoGenerate = true) val userId: Long = 0,
+    @ColumnInfo(name = "username") val username: String,
+    @ColumnInfo(name = "email") val email: String,
+    @ColumnInfo(name = "password_hash") val passwordHash: String?=null,
+    @ColumnInfo(name = "is_guest") val isGuest: Boolean,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long
+)
+
+// Game data class holding all information about one game instance.
+@Entity(tableName = "games")
+data class GamesEntity(
+    @PrimaryKey(autoGenerate = true) val gameId: Long = 0,
+    @ColumnInfo(name = "game_type") val gameType: GameTypes,
+    @ColumnInfo(name = "game_mode") val gameMode: GameModes,
+    @ColumnInfo(name = "min_players") val minPlayers: Int,
+    @ColumnInfo(name = "max_players") val maxPlayers: Int,
+    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime,
+    @ColumnInfo(name = "updated_at") val updatedAt: LocalDateTime
+)
+
+@Entity(
+    tableName = "game_players",
+    foreignKeys = [
+        ForeignKey(
+            entity = GamesEntity::class,
+            parentColumns = ["gameId"],
+            childColumns = ["game_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = UsersEntity::class,
+            parentColumns = ["userId"],
+            childColumns = ["player_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["game_id"]), Index(value = ["player_id"])]
+)
+data class GamePlayersEntity(
+    @PrimaryKey(autoGenerate = true) val gamePlayerId: Long = 0,
+    @ColumnInfo(name = "game_id") val gameId: Long,
+    @ColumnInfo(name = "player_id") val userId: Long,
+    @ColumnInfo(name = "device_id") val deviceId: String,  // Device or connection ID (for cross-device sync)
+    @ColumnInfo(name = "is_host") val isHost: Boolean,  // To track if the player is the host
+    @ColumnInfo(name = "is_ready") val isReady: Boolean = false,  // To track player's readiness in local multiplayer
+    @ColumnInfo(name = "joined_at") val joinedAt: LocalDateTime
+)
+
+// Game session data class tracking each individual game session.
+@Entity(
+    tableName = "game_sessions",
+    foreignKeys = [
+        ForeignKey(
+            entity = GamesEntity::class, parentColumns = ["gameId"], childColumns = ["game_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = UsersEntity::class, parentColumns = ["userId"], childColumns = ["player_id"],
+            onDelete = ForeignKey.CASCADE
+        )],
+    indices = [Index(value = ["game_id"]), Index(value = ["player_id"])]
+)
+data class GameSessionsEntity(
+    @PrimaryKey(autoGenerate = true) val sessionId: Long = 0,
+    @ColumnInfo(name = "game_id") val gameId: Long,
+    @ColumnInfo(name = "player_id") val playerId: Long,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "scores") val scores: Map<ScoreType, Int>,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "rolled_dice") val rolledDice: List<Dice>,
+    @ColumnInfo(name = "session_start") val sessionStart: LocalDateTime,
+    @ColumnInfo(name = "session_end") val sessionEnd: LocalDateTime?,
+    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime,
+    @ColumnInfo(name = "updated_at") val updatedAt: LocalDateTime
+)
+
+// Game result data class storing results for each game session.
+@Entity(
+    tableName = "game_results",
+    foreignKeys = [
+        ForeignKey(
+            entity = GameSessionsEntity::class, parentColumns = ["sessionId"],
+            childColumns = ["session_id"], onDelete = ForeignKey.CASCADE
+        )],
+    indices = [Index(value = ["session_id"])]
+)
+data class GameResultsEntity(
+    @PrimaryKey(autoGenerate = true) val resultId: Long = 0,
+    @ColumnInfo(name = "session_id") val sessionId: Long,
+    @ColumnInfo(name = "final_score") val finalScore: Map<String, Int>,
+    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime
+)
+
+// User settings data class for managing user preferences.
+@Entity(
+    tableName = "user_settings",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsersEntity::class, parentColumns = ["userId"], childColumns = ["user_id"],
+            onDelete = ForeignKey.CASCADE
+        )],
+    indices = [Index(value = ["user_id"])]
+)
+data class UserSettingsEntity(
+    @PrimaryKey(autoGenerate = true) val settingsId: Long = 0,
+    @ColumnInfo(name = "user_id") val userId: Long,
+    @ColumnInfo(name = "settings_key") val settingsKey: String,
+    @ColumnInfo(name = "settings_value") val settingsValue: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: LocalDateTime
+)
+
+// User statistics data class for tracking individual user performance.
+@Entity(
+    tableName = "user_statistics",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsersEntity::class, parentColumns = ["userId"], childColumns = ["user_id"],
+            onDelete = ForeignKey.CASCADE
+        )],
+    indices = [Index(value = ["user_id"])]
+)
+data class UserStatisticsEntity(
+    @PrimaryKey(autoGenerate = true) val statisticsId: Long = 0,
+    @ColumnInfo(name = "user_id") val userId: Long,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "level") val level: UserLevel, // Level of the player (Beginner, Intermediate, Expert),
+    @ColumnInfo(name = "action_type") val actionType: ActionType,
+    @ColumnInfo(name = "total_games_played") var totalGamesPlayed: Int,
+    @ColumnInfo(name = "total_games_won") var totalGamesWon: Int,
+    @ColumnInfo(name = "total_games_lost") var totalGamesLost: Int,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "achievements") var achievements: Set<AchievementsEntity>, // mutable now
+    @ColumnInfo(name = "highest_score") var highestScore: Int,
+    @ColumnInfo(name = "average_score") var averageScore: Double,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "favorite_game_mode") var favoriteGameMode: GameModes,
+    @ColumnInfo(name = "total_play_time") var totalPlayTime: Long,
+    @ColumnInfo(name = "updated_at") var updatedAt: LocalDateTime = LocalDateTime.now()
+)
+
+// Achievement class for tracking user achievements.
+@Entity(
+    tableName = "achievements",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsersEntity::class, parentColumns = ["userId"], childColumns = ["user_id"]
+        )],
+    indices = [Index(value = ["user_id"])]
+)
+data class AchievementsEntity(
+    @PrimaryKey val achievementId: Long,
+    @ColumnInfo(name = "user_id") val userId: Long,
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "description") val description: String,
+    @ColumnInfo(name = "unlocked") val unlocked: Boolean,
+    @ColumnInfo(name = "icon_resource") val iconResource: Int
+)
+
+// Friends entity representing the social feature for users.
+@Entity(
+    tableName = "friends",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsersEntity::class,
+            parentColumns = ["userId"],
+            childColumns = ["user_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = UsersEntity::class,
+            parentColumns = ["userId"],
+            childColumns = ["friend_user_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["user_id"]), Index(value = ["friend_user_id"])]
+)
+data class FriendsEntity(
+    @PrimaryKey(autoGenerate = true) val friendId: Long = 0,
+    @ColumnInfo(name = "user_id") val userId: Long,
+    @ColumnInfo(name = "friend_user_id") val friendUserId: Long,
+    @TypeConverters(MyTypeConverters::class)
+    @ColumnInfo(name = "status") val status: FriendStatus,
+    @ColumnInfo(name = "created_at") val createdAt: LocalDateTime = LocalDateTime.now(),
+    @ColumnInfo(name = "updated_at") val updatedAt: LocalDateTime = LocalDateTime.now()
+)

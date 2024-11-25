@@ -1,13 +1,10 @@
 package com.mayor.kavi.din
 
-import android.content.Context
 import com.mayor.kavi.data.dao.*
 import com.mayor.kavi.data.repository.*
-import com.mayor.kavi.data.service.AuthService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -18,40 +15,58 @@ class RepoModule {
     @Provides
     @Singleton
     fun provideUserRepository(
-        userDao: UserDao,
-        authService: AuthService,
-        @ApplicationContext context: Context
-    ): UserRepository = UserRepositoryImpl(userDao, authService, context)
+        userDao: UsersDao
+    ): UserRepository = UserRepositoryImpl(userDao)
 
     @Provides
     @Singleton
-    fun provideStatisticsRepository(
-        playerStatsDao: UserStatisticsDao,
-        achievementDao: AchievementDao
-    ): StatisticsRepository = StatisticsRepositoryImpl(playerStatsDao, achievementDao)
-
-    @Provides
-    @Singleton
-    fun provideGameRepository(
-        gameDao: GameDao,
+    fun provideUserStatisticsRepository(
         playerStatsDao: UserStatisticsDao
-    ): GameRepository = GameRepositoryImpl(gameDao, playerStatsDao)
+    ): UserStatisticsRepository = UserStatisticsRepositoryImpl(playerStatsDao)
 
     @Provides
     @Singleton
-    fun provideLeaderboardRepository(
-        leaderboardDao: LeaderboardDao
-    ): LeaderboardRepository = LeaderboardRepositoryImpl(leaderboardDao)
+    fun provideFriendsRepository(
+        friendsDao: FriendsDao
+    ): FriendsRepository = FriendsRepositoryImpl(friendsDao)
 
     @Provides
     @Singleton
     fun provideAchievementRepository(
-        achievementDao: AchievementDao
-    ): AchievementRepository = AchievementRepositoryImpl(achievementDao)
+        achievementsDao: AchievementsDao,
+        friendsDao: FriendsDao
+    ): AchievementRepository = AchievementRepositoryImpl(achievementsDao, friendsDao)
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(@ApplicationContext context: Context): SettingsRepository {
-        return SettingsRepositoryImpl(context) // Use the concrete implementation here
-    }
+    fun provideUserSettingsRepository(
+        userSettingsDao: UserSettingsDao
+    ): UserSettingsRepository = UserSettingsRepositoryImpl(userSettingsDao)
+
+    @Provides
+    @Singleton
+    fun provideGamePlayersRepository(
+        gamePlayersDao: GamePlayersDao
+    ): GamePlayerRepository = GamePlayersRepositoryImpl(gamePlayersDao)
+
+    @Provides
+    @Singleton
+    fun provideGameRepository(
+        gameDao: GamesDao,
+        usersDao: UsersDao,
+        playerStatsDao: UserStatisticsDao
+    ): GameRepository = GameRepositoryImpl(gameDao, usersDao, playerStatsDao)
+
+    @Provides
+    @Singleton
+    fun provideGameSessionRepository(
+        gameSessionsDao: GameSessionsDao
+    ): GameSessionRepository = GameSessionRepositoryImpl(gameSessionsDao)
+
+    @Provides
+    @Singleton
+    fun provideGameResultsRepository(
+        gameResultsDao: GameResultsDao
+    ): GameResultsRepository = GameResultsRepositoryImpl(gameResultsDao)
+
 }

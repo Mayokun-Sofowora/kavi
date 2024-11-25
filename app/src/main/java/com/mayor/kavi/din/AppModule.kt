@@ -3,9 +3,6 @@ package com.mayor.kavi.din
 import android.content.Context
 import com.mayor.kavi.data.KaviDatabase
 import com.mayor.kavi.data.dao.*
-import com.mayor.kavi.data.service.*
-import com.mayor.kavi.data.repository.SettingsRepository
-import com.mayor.kavi.data.repository.SettingsRepositoryImpl
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -19,24 +16,18 @@ class AppModule {
 
     @Provides
     @Singleton
-    fun provideAuthService(): AuthService = AuthServiceImpl()
-
-    @Provides
-    @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): KaviDatabase =
         KaviDatabase.getInstance(context)
 
     @Provides
-    fun provideGameDao(database: KaviDatabase): GameDao = database.gameDao()
+    fun provideGamesDao(database: KaviDatabase): GamesDao = database.gamesDao()
 
     @Provides
-    fun provideLeaderboardDao(database: KaviDatabase): LeaderboardDao = database.leaderboardDao()
+    fun provideUsersDao(database: KaviDatabase): UsersDao = database.usersDao()
 
     @Provides
-    fun provideUserDao(database: KaviDatabase): UserDao = database.userDao()
-
-    @Provides
-    fun providePlayerStatsDao(database: KaviDatabase): UserStatisticsDao = database.userStatisticsDao()
+    fun providePlayerStatisticsDao(database: KaviDatabase): UserStatisticsDao =
+        database.userStatisticsDao()
 
     @Provides
     fun provideGameSessionsDao(database: KaviDatabase): GameSessionsDao = database.gameSessionsDao()
@@ -48,9 +39,11 @@ class AppModule {
     fun provideUserSettingsDao(database: KaviDatabase): UserSettingsDao = database.userSettingsDao()
 
     @Provides
-    fun provideAchievementDao(database: KaviDatabase): AchievementDao = database.achievementDao()
+    fun provideAchievementsDao(database: KaviDatabase): AchievementsDao = database.achievementsDao()
 
     @Provides
     fun provideFriendsDao(database: KaviDatabase): FriendsDao = database.friendsDao()
 
+    @Provides
+    fun provideGamePlayerDao(database: KaviDatabase): GamePlayersDao = database.gamePlayersDao()
 }

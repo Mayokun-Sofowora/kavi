@@ -6,11 +6,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.compose.ui.unit.*
 import androidx.navigation.NavController
-import com.mayor.kavi.data.models.PlayerStats
 import com.mayor.kavi.ui.viewmodel.StatsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

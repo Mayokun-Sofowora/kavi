@@ -3,6 +3,7 @@ package com.mayor.kavi.data
 import android.content.Context
 import androidx.room.*
 import com.mayor.kavi.data.dao.*
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.utils.MyTypeConverters
 
 /**
@@ -11,23 +12,23 @@ import com.mayor.kavi.utils.MyTypeConverters
  * DatabaseBuilder.
  * */
 @Database(
-    entities = [Users::class, Games::class, Achievements::class, LeaderboardEntry::class,
-        GameSessions::class, GameResults::class, UserSettings::class, UserStatistics::class,
-        Friends::class],
+    entities = [UsersEntity::class, GamesEntity::class, AchievementsEntity::class,
+        GameSessionsEntity::class, GameResultsEntity::class, UserSettingsEntity::class,
+        UserStatisticsEntity::class, GamePlayersEntity::class, FriendsEntity::class],
     version = 2,
     exportSchema = false
 )
 @TypeConverters(MyTypeConverters::class)
 abstract class KaviDatabase : RoomDatabase() {
-    abstract fun gameDao(): GameDao
-    abstract fun userDao(): UserDao
-    abstract fun achievementDao(): AchievementDao
-    abstract fun leaderboardDao(): LeaderboardDao
+    abstract fun gamesDao(): GamesDao
+    abstract fun usersDao(): UsersDao
+    abstract fun achievementsDao(): AchievementsDao
     abstract fun gameSessionsDao(): GameSessionsDao
     abstract fun gameResultsDao(): GameResultsDao
     abstract fun userSettingsDao(): UserSettingsDao
     abstract fun userStatisticsDao(): UserStatisticsDao
     abstract fun friendsDao(): FriendsDao
+    abstract fun gamePlayersDao(): GamePlayersDao
 
     companion object {
         @Volatile

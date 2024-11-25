@@ -1,8 +1,6 @@
 package com.mayor.kavi.data.repository
 
-import android.content.Context
-import android.content.SharedPreferences
-import com.mayor.kavi.data.dao.UserSettings
+import com.mayor.kavi.data.models.UserSettingsEntity
 import com.mayor.kavi.data.dao.UserSettingsDao
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -11,9 +9,9 @@ interface UserSettingsRepository {
 
     // General CRUD operations
     suspend fun saveOrUpdateSetting(userId: Long, key: String, value: String)
-    suspend fun getSettingsByUserId(userId: Long): List<UserSettings>
-    suspend fun getSettingByKey(key: String): UserSettings?
-    suspend fun deleteSetting(settings: UserSettings)
+    suspend fun getSettingsByUserId(userId: Long): List<UserSettingsEntity>
+    suspend fun getSettingByKey(key: String): UserSettingsEntity?
+    suspend fun deleteSetting(settings: UserSettingsEntity)
     suspend fun deleteSettingsByUserId(userId: Long)
 
     // Game Use Case Functions
@@ -53,7 +51,7 @@ class UserSettingsRepositoryImpl @Inject constructor(
             )
             userSettingsDao.updateSettings(updatedSetting)
         } else {
-            val newSetting = UserSettings(
+            val newSetting = UserSettingsEntity(
                 userId = userId,
                 settingsKey = key,
                 settingsValue = value,
@@ -63,15 +61,15 @@ class UserSettingsRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getSettingsByUserId(userId: Long): List<UserSettings> {
+    override suspend fun getSettingsByUserId(userId: Long): List<UserSettingsEntity> {
         return userSettingsDao.getSettingsByUserId(userId)
     }
 
-    override suspend fun getSettingByKey(key: String): UserSettings? {
+    override suspend fun getSettingByKey(key: String): UserSettingsEntity? {
         return userSettingsDao.getSettingsByKey(key)
     }
 
-    override suspend fun deleteSetting(settings: UserSettings) {
+    override suspend fun deleteSetting(settings: UserSettingsEntity) {
         userSettingsDao.deleteSettings(settings)
     }
 
@@ -98,7 +96,7 @@ class UserSettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun isARToggleEnabled(userId: Long): Boolean {
-        return userSettingsDao.getSettingsByKey("ar_toggle")?.settingsValue?.toBoolean() ?: false
+        return userSettingsDao.getSettingsByKey("ar_toggle")?.settingsValue?.toBoolean() == true
     }
 
     override suspend fun setARToggle(userId: Long, isEnabled: Boolean) {
@@ -130,8 +128,7 @@ class UserSettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun isPerformanceAnalyticsEnabled(userId: Long): Boolean {
-        return userSettingsDao.getSettingsByKey("performance_analytics")?.settingsValue?.toBoolean()
-            ?: false
+        return userSettingsDao.getSettingsByKey("performance_analytics")?.settingsValue?.toBoolean() == true
     }
 
     override suspend fun setPerformanceAnalytics(userId: Long, isEnabled: Boolean) {
