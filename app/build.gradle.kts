@@ -3,9 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.dagger.hilt.android") version "2.51.1"
-    id("com.google.gms.google-services") version "4.4.0"
+    id("com.google.gms.google-services") version "4.4.2"
     id("com.google.devtools.ksp") version "2.0.21-1.0.27"
     id("org.jetbrains.dokka") version "1.9.20"
+    id("com.google.firebase.crashlytics") version "3.0.2"
+    kotlin("plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -43,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.3"
@@ -52,15 +55,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-
+    viewBinding {
+        enable = true
+    }
 }
-
-//apply {
-//    plugin("com.google.dagger.hilt.android")
-//    plugin("com.google.gms.google-services")
-//    plugin("com.google.devtools.ksp")
-//    plugin("org.jetbrains.dokka")
-//}
 
 dependencies {
 
@@ -68,18 +66,25 @@ dependencies {
     implementation("androidx.navigation:navigation-fragment-ktx:2.8.4")
     implementation("androidx.navigation:navigation-ui-ktx:2.8.4")
     // Room local db
-    implementation("androidx.room:room-ktx:2.6.1")
+//    implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
-    implementation("androidx.room:room-runtime:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+//    implementation("androidx.room:room-runtime:2.6.1")
+//    ksp("androidx.room:room-compiler:2.6.1")
+
     // Kotlin Coroutine
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     // Firebase cloud db
-//    implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
-//    implementation("com.google.firebase:firebase-auth-ktx")
-//    implementation("com.google.firebase:firebase-firestore-ktx")
-//    implementation("com.google.firebase:firebase-analytics-ktx")
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
+    // Libraries for Authentication, Analyzing and Cloud Firestore
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-dynamic-links")
     // Dagger - Hilt Dependency Injector
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     implementation("com.google.dagger:hilt-android:2.51.1")
@@ -88,9 +93,14 @@ dependencies {
     // Datastore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     //Google auth dependency
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("androidx.credentials:credentials:1.5.0-beta01")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0-beta01")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     // Google fonts
     implementation("androidx.compose.ui:ui-text-google-fonts:1.7.5")
+    // Preference
+    implementation("androidx.preference:preference-ktx:1.2.1")
     // Tensorflow & Support Library
     implementation("org.tensorflow:tensorflow-lite:2.13.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
@@ -105,12 +115,19 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.0")
     implementation("androidx.camera:camera-core:1.4.0")
     // JSON De/Serialization
-    implementation("com.google.code.gson:gson:2.10.1")
+//    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // Documentation library
     implementation("org.jetbrains.dokka:android-documentation-plugin:1.9.20")
     // Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.3")
+    // Splash Screen
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    // Timber logger
+    implementation("com.jakewharton.timber:timber:5.0.1")
+    // Lottie animation
+    implementation("com.airbnb.android:lottie-compose:6.6.1")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -121,6 +138,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
+    implementation("androidx.compose.runtime:runtime-livedata:1.4.3")
 
     // Hilt Test
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
@@ -129,6 +147,12 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     // Mockito Test
     testImplementation("org.mockito:mockito-core:5.0.0")
+    testImplementation("org.mockito:mockito-inline:5.0.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.9.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.9.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.9.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
     // Room Test
     testImplementation("androidx.room:room-testing:2.6.1")
 

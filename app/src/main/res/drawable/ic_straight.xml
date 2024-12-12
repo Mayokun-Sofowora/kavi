@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Background Circle -->
+    <path
+        android:fillColor="#BBDEFB"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2Z" />
+
+    <!-- Six Straight Dots -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M5,12C5.55,12 6,12.45 6,13C6,13.55 5.55,14 5,14C4.45,14 4,13.55 4,13C4,12.45 4.45,12 5,12Z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M8,12C8.55,12 9,12.45 9,13C9,13.55 8.55,14 8,14C7.45,14 7,13.55 7,13C7,12.45 7.45,12 8,12Z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M11,12C11.55,12 12,12.45 12,13C12,13.55 11.55,14 11,14C10.45,14 10,13.55 10,13C10,12.45 10.45,12 11,12Z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M14,12C14.55,12 15,12.45 15,13C15,13.55 14.55,14 14,14C13.45,14 13,13.55 13,13C13,12.45 13.45,12 14,12Z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M17,12C17.55,12 18,12.45 18,13C18,13.55 17.55,14 17,14C16.45,14 16,13.55 16,13C16,12.45 16.45,12 17,12Z" />
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M20,12C20.55,12 21,12.45 21,13C21,13.55 20.55,14 20,14C19.45,14 19,13.55 19,13C19,12.45 19.45,12 20,12Z" />
+</vector>
