@@ -1,37 +1,26 @@
+// DiceViewModel.kt
 package com.mayor.kavi.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
-import android.hardware.*
 import android.os.*
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.lifecycle.*
 import com.airbnb.lottie.compose.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.mayor.kavi.R
-import com.mayor.kavi.data.DataStoreManager
-import com.mayor.kavi.data.MultiplayerManager
-import com.mayor.kavi.ui.components.GameAI
-import com.mayor.kavi.ui.viewmodel.GameBoard
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.mayor.kavi.data.*
+import com.mayor.kavi.util.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
 import javax.inject.Inject
 import kotlin.random.Random
-
-enum class GameBoard(val modeName: String) {
-    PIG("Pig"),
-    GREED("Greed / 10000"),
-    MEXICO("Mexico"),
-    CHICAGO("Chicago"),
-    BALUT("Balut")
-}
+import com.mayor.kavi.data.games.*
+import com.mayor.kavi.data.manager.*
+import dagger.assisted.Assisted
 
 data class ScoreState(
     val currentTurnScore: Int = 0,
@@ -40,83 +29,109 @@ data class ScoreState(
     val resultMessage: String = ""
 )
 
-data class MexicoScoreState(
-    val currentRound: Int = 1,
-    val lives: Int = 6,
-    val isFirstRound: Boolean = true,
-    val roundScores: MutableList<Int> = mutableListOf()
-)
-
-data class ChicagoScoreState(
-    val currentRound: Int = 2,
-    val totalScore: Int = 0,
-    val roundScore: Int = 0,
-    val hasScored: Boolean = false
-)
-
-data class BalutScoreState(
-    val currentCategory: String = "Aces",
-    val currentRound: Int = 1,
-    val maxRolls: Int = 3,
-    val rollsLeft: Int = 3
-) {
-    companion object {
-        val categories = listOf(
-            "Aces", "Twos", "Threes", "Fours", "Fives", "Sixes",
-            "Straight", "Full House", "Four of a Kind", "Five of a Kind", "Choice"
-        )
-    }
-}
-
 @HiltViewModel
-class DiceViewModel @Inject constructor(application: Application) : AndroidViewModel(application) {
-    private val diceDataStore = DataStoreManager.getInstance(application)
+class DiceViewModel @Inject constructor(
+    application: Application,
+    private val statisticsManager: StatisticsManager,
+    private val gameRepository: GameRepository,
+    @Assisted private val multiplayerViewModel: MultiplayerViewModel,  // Fix injection
+    private val shakeDetectionService: ShakeDetectionService,
+    val networkConnection: NetworkConnection
+) : AndroidViewModel(application) {
+    private val diceDataStore = DataStoreManager.Companion.getInstance(application)
 
     // Settings & Board Selection
     private val _shakeEnabled = diceDataStore.getShakeEnabled().asLiveData()
     val shakeEnabled: LiveData<Boolean> = _shakeEnabled
-    private val _selectedBoard = diceDataStore.getSelectedBoard().asLiveData()
-    val selectedBoard: LiveData<String> = _selectedBoard
+    private val _vibrationEnabled = MutableStateFlow(true)
+    val vibrationEnabled = diceDataStore.getVibrationEnabled().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        true
+    )
+    private val _selectedBoard = MutableStateFlow("")
+    val selectedBoard: StateFlow<String> = _selectedBoard
 
     // Game States
     private val _scoreState = MutableStateFlow(ScoreState())
     val scoreState: StateFlow<ScoreState> = _scoreState
     private val _mexicoScoreState = MutableStateFlow(MexicoScoreState())
-    val mexicoScoreState: StateFlow<MexicoScoreState> = _mexicoScoreState.asStateFlow()
+    val mexicoScoreState: StateFlow<MexicoScoreState> = _mexicoScoreState
     private val _chicagoScoreState = MutableStateFlow(ChicagoScoreState())
-    val chicagoScoreState: StateFlow<ChicagoScoreState> = _chicagoScoreState.asStateFlow()
+    val chicagoScoreState: StateFlow<ChicagoScoreState> = _chicagoScoreState
     private val _balutScoreState = MutableStateFlow(BalutScoreState())
-    val balutScoreState: StateFlow<BalutScoreState> = _balutScoreState.asStateFlow()
+    val balutScoreState: StateFlow<BalutScoreState> = _balutScoreState
 
     // Confetti settings
     private val _showConfetti = MutableStateFlow(false)
-    val showConfetti: StateFlow<Boolean> = _showConfetti.asStateFlow()
+    val showConfetti: StateFlow<Boolean> = _showConfetti
 
     // Dice Display
     private val _diceImages = MutableStateFlow(List(6) { R.drawable.empty_dice })
     val diceImages: StateFlow<List<Int>> = _diceImages
+    private val _isRolling = MutableStateFlow(false)
+    val isRolling = _isRolling.asStateFlow()
 
     // Opponent management
-    private val multiplayerManager = MultiplayerManager()
-    private val gameAI = GameAI()
-
-    private val _gameMode = MutableStateFlow<GameMode>(GameMode.SinglePlayer)
-    val gameMode: StateFlow<GameMode> = _gameMode
-
-    sealed class GameMode {
-        object SinglePlayer : GameMode()
-        object VsAI : GameMode()
-        data class Multiplayer(val sessionId: String) : GameMode()
+    sealed class PlayMode {
+        object SinglePlayer : PlayMode()
+        data class Multiplayer(val sessionId: String) : PlayMode()
     }
 
-    // Shake Detection
-    private val sensorManager =
-        application.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private var accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    private var accelerometerListener: SensorEventListener? = null
-    private var lastShakeTime = 0L
-    private val shakeCooldown = 1000L
-    private val shakeThreshold = 0.5f
+    // Game Modes
+    private val _playMode = MutableStateFlow<PlayMode>(PlayMode.SinglePlayer)
+    val playMode: StateFlow<PlayMode> = _playMode
+
+    // Statistics and Profile
+    private val _gameStats = MutableStateFlow(GameStats(0, emptyMap(), emptyMap()))
+    val gameStats: StateFlow<GameStats> = _gameStats
+    private val _userProfile = MutableStateFlow<UserProfile?>(null)
+    val userProfile: StateFlow<UserProfile?> = _userProfile
+    private val _nearbyPlayers = MutableStateFlow<List<UserProfile>>(emptyList())
+    val nearbyPlayers: StateFlow<List<UserProfile>> = _nearbyPlayers
+
+    init {
+        viewModelScope.launch {
+            statisticsManager.getGameStats().collect { stats ->
+                _gameStats.value = stats
+            }
+        }
+        viewModelScope.launch {
+            diceDataStore.getVibrationEnabled().collect { enabled ->
+                _vibrationEnabled.value = enabled
+            }
+        }
+        shakeDetectionService.setOnShakeListener {
+            viewModelScope.launch {
+                _isRolling.value = true
+                rollDice(_selectedBoard.value)
+                delay(2000)
+                _isRolling.value = false
+            }
+        }
+        resetGame()
+    }
+
+    // Handle connection between Multiplayer and dice view model
+    fun handleMultiplayerRoll(sessionId: String, diceResults: List<Int>, score: Int) {
+        viewModelScope.launch {
+            when (val currentSession = multiplayerViewModel.gameSession.value) {
+                is Result.Success -> {
+                    if (currentSession.data.currentTurn == gameRepository.getCurrentUserId()) {
+                        multiplayerViewModel.updateGameState(
+                            sessionId = sessionId,
+                            diceResults = diceResults,
+                            score = score,
+                            isGameOver = score >= (winConditions[_selectedBoard.value]
+                                ?: Int.MAX_VALUE)
+                        )
+                    }
+                }
+
+                else -> Timber.e("Invalid game session state")
+            }
+        }
+    }
 
     // Win Conditions
     private val winConditions = mapOf(
@@ -127,75 +142,19 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
         GameBoard.BALUT.modeName to 100
     )
 
-    init {
-        resetGame()
-    }
+    fun rollDice(selectedBoard: String) = viewModelScope.launch {
+        if (!validateBoard(selectedBoard)) return@launch
 
-    fun startAIGame(board: String) {
-        _gameMode.value = GameMode.VsAI
-        setSelectedBoard(board)
-        resetGame()
-    }
-
-    fun processAITurn() {
-        viewModelScope.launch {
-            val currentBoard = selectedBoard.value ?: GameBoard.PIG.modeName
-
-            // Convert dice images back to values for AI processing
-            val diceValues = _diceImages.value.map { image ->
-                when (image) {
-                    R.drawable.dice_1 -> 1
-                    R.drawable.dice_2 -> 2
-                    R.drawable.dice_3 -> 3
-                    R.drawable.dice_4 -> 4
-                    R.drawable.dice_5 -> 5
-                    R.drawable.dice_6 -> 6
-                    else -> 0
-                }
-            }.filter { it != 0 }
-
-            val decision = gameAI.makeDecision(
-                currentBoard,
-                scoreState.value.currentTurnScore,
-                diceValues
-            )
-
-            delay(1000) // Add slight delay for more natural AI behavior
-
-            when (decision) {
-                is GameAI.AIDecision.Roll -> {
-                    rollDice(currentBoard)
-                    // Schedule next AI decision after roll animation
-                    delay(2000)
-                    processAITurn()
-                }
-
-                is GameAI.AIDecision.Bank -> {
-                    endTurn(currentBoard)
-                }
-
-                is GameAI.AIDecision.SelectDice -> {
-                    when (currentBoard) {
-                        GameBoard.BALUT.modeName -> {
-                            // Handle Balut-specific dice selection
-                            val selectedDice = decision.indices
-                            // Update held dice state
-                            // Re-roll non-selected dice
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fun rollDice(selectedBoard: String) {
-        if (!validateBoard(selectedBoard)) return
+        _isRolling.value = true  // Start rolling animation
 
         provideHapticFeedback()
         val diceCount = getDiceCountForBoard(selectedBoard)
         val results = generateDiceRolls(diceCount)
         updateDiceImages(results)
         processRollResults(selectedBoard, results)
+
+        delay(2000)
+        _isRolling.value = false  // End rolling animation
     }
 
     private fun validateBoard(board: String): Boolean {
@@ -221,6 +180,7 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
         _diceImages.value = results.map { setImage(it) }
     }
 
+    // Process Rolls for the results and for each board
     private fun processRollResults(board: String, results: List<Int>) {
         when (board) {
             GameBoard.PIG.modeName -> processPigRoll(results.first())
@@ -303,6 +263,7 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
         }
     }
 
+    // calculate and build the scores for greed and mexico
     private fun calculateGreedScore(dice: List<Int>): Int {
         val counts = dice.groupBy { it }.mapValues { it.value.size }
         var score = 0
@@ -314,7 +275,6 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
             counts.any { it.value == 5 } -> return 2000 // Five of a kind
             counts.count { it.value == 2 } == 3 -> return 1500 // Three pairs
         }
-
         // Process three or more of a kind
         counts.forEach { (number, count) ->
             when {
@@ -415,19 +375,10 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
         }
     }
 
-    fun triggerConfetti() {
-        viewModelScope.launch {
-            _showConfetti.value = true
-            delay(2000) // Duration of confetti animation
-            _showConfetti.value = false
-        }
-    }
-
     // Update the endTurn function to trigger confetti on win
-    fun endTurn(board: String = selectedBoard.value ?: GameBoard.PIG.modeName) {
+    fun endTurn(board: String = _selectedBoard.value) {
         val currentScore = _scoreState.value.overallScore + _scoreState.value.currentTurnScore
         val isGameOver = currentScore >= (winConditions[board] ?: Int.MAX_VALUE)
-
         _scoreState.value = ScoreState(
             overallScore = currentScore,
             isGameOver = isGameOver,
@@ -438,72 +389,62 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
         }
     }
 
-    fun startShakeDetection() {
-        if (shakeEnabled.value != true) return
-
-        accelerometerListener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent?) {
-                event?.let {
-                    if (it.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-                    if (System.currentTimeMillis() - lastShakeTime < shakeCooldown) return
-
-                    val acceleration = it.values.map { value -> value * value }.sum()
-                    if (acceleration > shakeThreshold) {
-                        lastShakeTime = System.currentTimeMillis()
-                        selectedBoard.value?.let { board -> rollDice(board) }
-                    }
-                }
-            }
-
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-        }
-
-        accelerometer?.let { sensor ->
-            sensorManager.registerListener(
-                accelerometerListener,
-                sensor,
-                SensorManager.SENSOR_DELAY_GAME
-            )
-        }
-    }
-
-    fun setShakeEnabled(enabled: Boolean) = viewModelScope.launch(Dispatchers.IO) {
-        diceDataStore.setShakeEnabled(enabled)
-        if (enabled) {
-            startShakeDetection()
-        } else {
-            stopShakeDetection()
-        }
-    }
-
-    fun stopShakeDetection() {
-        accelerometerListener?.let {
-            sensorManager.unregisterListener(it)
-            accelerometerListener = null
-        }
-    }
-
     fun resetGame() {
         _scoreState.value = ScoreState()
         _diceImages.value = List(6) { R.drawable.empty_dice }
-        when (selectedBoard.value) {
+        when (_selectedBoard.value) {
             GameBoard.MEXICO.modeName -> _mexicoScoreState.value = MexicoScoreState()
             GameBoard.CHICAGO.modeName -> _chicagoScoreState.value = ChicagoScoreState()
-            GameBoard.BALUT.modeName -> _balutScoreState.value = BalutScoreState()
         }
     }
 
+    fun triggerConfetti() {
+        viewModelScope.launch {
+            _showConfetti.value = true
+            delay(2000) // Duration of confetti animation
+            _showConfetti.value = false
+        }
+    }
+
+    // Set the functions for the dice
+
+    fun setSelectedBoard(board: String) {
+        _selectedBoard.value = board
+    }
+
     private fun setImage(value: Int) = when (value) {
-        in 1..6 -> R.drawable::class.java.getField("dice_$value").getInt(null)
+        1 -> R.drawable.dice_1
+        2 -> R.drawable.dice_2
+        3 -> R.drawable.dice_3
+        4 -> R.drawable.dice_4
+        5 -> R.drawable.dice_5
+        6 -> R.drawable.dice_6
         else -> R.drawable.empty_dice
     }
 
-    fun setSelectedBoard(board: String) = viewModelScope.launch(Dispatchers.IO) {
-        diceDataStore.setSelectedBoard(board)
-        resetGame()
+    fun pauseShakeDetection() {
+        shakeDetectionService.clearOnShakeListener()
+        shakeDetectionService.stopListening()
+    }
+
+    fun resumeShakeDetection() {
+        shakeDetectionService.setOnShakeListener {
+            viewModelScope.launch {
+                if (!_isRolling.value) {
+                    rollDice(_selectedBoard.value)
+                }
+            }
+        }
+        shakeDetectionService.startListening()
+    }
+
+    fun setVibrationEnabled(enabled: Boolean) = viewModelScope.launch(Dispatchers.IO) {
+        diceDataStore.setVibrationEnabled(enabled)
     }
 
     private fun provideHapticFeedback() {
+        if (!_vibrationEnabled.value) return
+
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vibratorManager = getApplication<Application>()
                 .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -512,13 +453,18 @@ class DiceViewModel @Inject constructor(application: Application) : AndroidViewM
             @Suppress("DEPRECATION")
             getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-
         vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
+
+    fun setPlayMode(playMode: PlayMode) {
+        _playMode.value = playMode
+        Timber.d("Play mode set to: $playMode")
+        resetGame()
     }
 
     override fun onCleared() {
         super.onCleared()
-        stopShakeDetection()
+        shakeDetectionService.clearOnShakeListener()
     }
 }
 
@@ -539,7 +485,6 @@ fun ConfettiAnimation(
         restartOnPlay = false,
         cancellationBehavior = LottieCancellationBehavior.Immediately
     )
-
     // Handle completion
     LaunchedEffect(progress) {
         if (progress == 1f) {
@@ -547,7 +492,6 @@ fun ConfettiAnimation(
             onComplete()
         }
     }
-
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center

@@ -1,6 +1,7 @@
 package com.mayor.kavi.ui.screens.boards
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -9,15 +10,19 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.*
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
+import com.mayor.kavi.data.games.BoardColors
+import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.manager.LocalSettingsManager
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.components.DiceRollAnimation
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,10 +34,11 @@ fun BoardThreeScreen(
     var showExitGameDialog by remember { mutableStateOf(false) }
     val scoreState by viewModel.scoreState.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
-    var isRolling by remember { mutableStateOf(false) }
+    val isRolling by viewModel.isRolling.collectAsState()
     var showWinDialog by remember { mutableStateOf(false) }
     val mexicoState by viewModel.mexicoScoreState.collectAsState()
-    val shakeEnabled by viewModel.shakeEnabled.observeAsState(initial = false)
+    val settingsManager = LocalSettingsManager.current
+    val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
 
     BackHandler(enabled = true) {
         if (showWinDialog) {
@@ -41,17 +47,16 @@ fun BoardThreeScreen(
             showExitGameDialog = true
         }
     }
-    // Game initialization and cleanup (similar to BoardOneScreen)
-    LaunchedEffect(Unit) {
-        viewModel.setSelectedBoard(GameBoard.MEXICO.modeName)
-        if (shakeEnabled) {
-            viewModel.startShakeDetection()
-        }
+
+    // Check for game over condition
+    LaunchedEffect(scoreState) {
+        showWinDialog = scoreState.isGameOver
     }
 
     DisposableEffect(Unit) {
+        viewModel.resumeShakeDetection()
         onDispose {
-            viewModel.stopShakeDetection()
+            viewModel.pauseShakeDetection()
         }
     }
 
@@ -84,6 +89,7 @@ fun BoardThreeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .background(color = BoardColors.getColor(boardColor))
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -130,7 +136,7 @@ fun BoardThreeScreen(
                             style = MaterialTheme.typography.headlineMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.fillMaxWidth(0.8f),
                             color = colorResource(id = R.color.on_tertiary_container)
                         )
@@ -167,12 +173,7 @@ fun BoardThreeScreen(
                 // Roll button
                 Button(
                     onClick = {
-                        isRolling = true
                         viewModel.rollDice(GameBoard.MEXICO.modeName)
-                        kotlinx.coroutines.MainScope().launch {
-                            kotlinx.coroutines.delay(2000)
-                            isRolling = false
-                        }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colorResource(id = R.color.primary),
@@ -226,7 +227,7 @@ fun BoardThreeScreen(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary)
                         ),
-                            ) {
+                        ) {
                             Text("Exit")
                         }
                     }

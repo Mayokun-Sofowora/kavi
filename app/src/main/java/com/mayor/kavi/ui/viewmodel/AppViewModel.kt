@@ -3,11 +3,10 @@ package com.mayor.kavi.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.*
 import com.mayor.kavi.data.*
+import com.mayor.kavi.data.manager.DataStoreManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.*
 import timber.log.Timber
 import javax.inject.Inject
 import com.mayor.kavi.util.Result
@@ -17,17 +16,11 @@ class AppViewModel @Inject constructor(
     application: Application,
     private val gameRepository: GameRepository
 ) : AndroidViewModel(application) {
-    private val diceDataStore = DataStoreManager.getInstance(application)
+    private val diceDataStore = DataStoreManager.Companion.getInstance(application)
     
     // App-wide settings and modes
-    private val _appTheme = diceDataStore.getThemeMode().asLiveData()
-    val appTheme: LiveData<String> = _appTheme
-
     private val _interfaceMode = diceDataStore.getInterfaceMode().asLiveData()
     val interfaceMode: LiveData<String> = _interfaceMode
-
-    private val _playMode = diceDataStore.getPlayMode().asLiveData()
-    val playMode: LiveData<String> = _playMode
 
     // User state
     private val _userProfileState = MutableStateFlow<Result<UserProfile>>(Result.Loading(null))
@@ -44,18 +37,6 @@ class AppViewModel @Inject constructor(
     // Settings methods
     fun setInterfaceMode(mode: String) = viewModelScope.launch(Dispatchers.IO) {
         diceDataStore.setInterfaceMode(mode)
-    }
-
-    fun setPlayMode(mode: String) = viewModelScope.launch(Dispatchers.IO) {
-        diceDataStore.setPlayMode(mode)
-    }
-
-    fun setSelectedBoard(board: String) = viewModelScope.launch(Dispatchers.IO) {
-        diceDataStore.setSelectedBoard(board)
-    }
-
-    fun setAppTheme(theme: String) = viewModelScope.launch(Dispatchers.IO) {
-        diceDataStore.setThemeMode(theme)
     }
 
     // User profile methods

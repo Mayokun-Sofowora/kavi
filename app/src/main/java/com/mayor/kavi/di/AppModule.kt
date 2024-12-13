@@ -6,9 +6,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mayor.kavi.authentication.AuthRepository
 import com.mayor.kavi.authentication.AuthRepositoryImpl
-import com.mayor.kavi.data.DataStoreManager
-import com.mayor.kavi.data.GameRepository
-import com.mayor.kavi.data.GameRepositoryImpl
+import com.mayor.kavi.data.*
+import com.mayor.kavi.data.manager.DataStoreManager
+import com.mayor.kavi.data.manager.SettingsManager
+import com.mayor.kavi.data.manager.StatisticsManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -63,4 +64,17 @@ object AppModule {
     fun provideDataStoreManager(@ApplicationContext context: Context): DataStoreManager {
         return DataStoreManager(context)
     }
+
+    @Provides
+    @Singleton
+    fun provideSettingsManager(@ApplicationContext context: Context): SettingsManager {
+        return SettingsManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideStatisticsManager(@ApplicationContext context: Context): StatisticsManager {
+        return StatisticsManager(context)
+    }
+
 }

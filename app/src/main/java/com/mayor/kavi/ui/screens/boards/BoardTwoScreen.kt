@@ -1,26 +1,28 @@
 package com.mayor.kavi.ui.screens.boards
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
+import com.mayor.kavi.data.games.BoardColors
+import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.manager.LocalSettingsManager
 import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.ui.viewmodel.DiceViewModel
-import com.mayor.kavi.ui.viewmodel.GameBoard
+import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
 import com.mayor.kavi.ui.components.DiceRollAnimation
-import com.mayor.kavi.ui.viewmodel.ConfettiAnimation
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,9 +34,10 @@ fun BoardTwoScreen(
     var showExitGameDialog by remember { mutableStateOf(false) }
     val scoreState by viewModel.scoreState.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
-    var isRolling by remember { mutableStateOf(false) }
+    val isRolling by viewModel.isRolling.collectAsState()
     var showWinDialog by remember { mutableStateOf(false) }
-    val shakeEnabled by viewModel.shakeEnabled.observeAsState(initial = false)
+    val settingsManager = LocalSettingsManager.current
+    val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
 
     // Back handler
     BackHandler(enabled = true) {
@@ -45,22 +48,21 @@ fun BoardTwoScreen(
         }
     }
 
-    // Game initialization
-    LaunchedEffect(Unit) {
-        viewModel.setSelectedBoard(GameBoard.GREED.modeName)
-        if (shakeEnabled) {
-            viewModel.startShakeDetection()
-        }
+    // Check for game over condition
+    LaunchedEffect(scoreState) {
+        showWinDialog = scoreState.isGameOver
     }
 
-    // Cleanup
     DisposableEffect(Unit) {
+        viewModel.resumeShakeDetection()
         onDispose {
-            viewModel.stopShakeDetection()
+            viewModel.pauseShakeDetection()
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+    ) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -84,11 +86,12 @@ fun BoardTwoScreen(
                     }
                 )
             }
-        ) { paddingValues ->
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(padding)
+                    .background(color = BoardColors.getColor(boardColor))
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -151,7 +154,7 @@ fun BoardTwoScreen(
                             style = MaterialTheme.typography.headlineMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.fillMaxWidth(0.8f),
                             color = colorResource(id = R.color.on_surface_variant)
                         )
@@ -192,12 +195,7 @@ fun BoardTwoScreen(
                 ) {
                     Button(
                         onClick = {
-                            isRolling = true
                             viewModel.rollDice(GameBoard.GREED.modeName)
-                            kotlinx.coroutines.MainScope().launch {
-                                kotlinx.coroutines.delay(2000)
-                                isRolling = false
-                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
@@ -229,6 +227,7 @@ fun BoardTwoScreen(
                     gameMode = GameBoard.GREED.modeName,
                     diceResult = scoreState.resultMessage
                 )
+
             }
         }
 

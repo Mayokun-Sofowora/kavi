@@ -1,7 +1,10 @@
 package com.mayor.kavi.ui.screens.boards
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
@@ -11,11 +14,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
+import com.mayor.kavi.data.games.BoardColors
+import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.manager.LocalSettingsManager
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
 import com.mayor.kavi.ui.components.DiceRollAnimation
-import com.mayor.kavi.ui.viewmodel.DiceViewModel.GameMode
 import kotlinx.coroutines.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,12 +31,12 @@ fun BoardOneScreen(
 ) {
     var showExitGameDialog by remember { mutableStateOf(false) }
     val scoreState by viewModel.scoreState.collectAsState()
+    val isRolling by viewModel.isRolling.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
-    var isRolling by remember { mutableStateOf(false) }
     var showWinDialog by remember { mutableStateOf(false) }
-    val shakeEnabled by viewModel.shakeEnabled.observeAsState(initial = false)
-    val gameMode by viewModel.gameMode.collectAsState()
-    val isAITurn = gameMode is GameMode.VsAI && !isRolling
+
+    val settingsManager = LocalSettingsManager.current
+    val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
 
     // Add BackHandler to prevent back navigation during game
     BackHandler(enabled = true) {
@@ -44,49 +49,47 @@ fun BoardOneScreen(
         }
     }
 
-    // Start shake detection when screen is active
-    LaunchedEffect(Unit) {
-        viewModel.setSelectedBoard(GameBoard.PIG.modeName)
-        if (shakeEnabled) {
-            viewModel.startShakeDetection()
-        }
-    }
-
-    // Cleanup shake detection when leaving screen
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopShakeDetection()
-        }
-    }
-
-    // Listen for shake events
-    LaunchedEffect(diceImages) {
-        if (diceImages.firstOrNull() != R.drawable.empty_dice && !isRolling) {
-            isRolling = true
-            delay(2000)
-            isRolling = false
-        }
-    }
+    // Launched effects only used once when the component is composed
 
     // Check for game over condition
     LaunchedEffect(scoreState) {
         showWinDialog = scoreState.isGameOver
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    DisposableEffect(Unit) {
+        viewModel.resumeShakeDetection()
+        onDispose {
+            viewModel.pauseShakeDetection()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            if (isAITurn) "Pig Dice Game (AI's Turn)"
-                            else "Pig Dice Game"
-                        )
+                        Text("Pig")
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = colorResource(id = R.color.primary_container),
                         titleContentColor = colorResource(id = R.color.on_primary_container)
-                    )
+                    ),
+                    actions = {
+                        IconButton(
+                            onClick = { navController.navigate(Routes.Settings.route) },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                modifier = Modifier.size(24.dp),
+                                tint = colorResource(id = R.color.on_primary_container)
+                            )
+                        }
+                    }
                 )
             }
         ) { padding ->
@@ -94,6 +97,7 @@ fun BoardOneScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .background(color = BoardColors.getColor(boardColor))
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -139,7 +143,7 @@ fun BoardOneScreen(
                             style = MaterialTheme.typography.headlineMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.fillMaxWidth(0.8f),
                             color = colorResource(id = R.color.on_surface_variant)
                         )
@@ -180,15 +184,7 @@ fun BoardOneScreen(
                 ) {
                     Button(
                         onClick = {
-                            isRolling = true
                             viewModel.rollDice(GameBoard.PIG.modeName)
-                            MainScope().launch {
-                                delay(2000)
-                                isRolling = false
-                                if (gameMode is GameMode.VsAI) {
-                                    viewModel.processAITurn()
-                                }
-                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
@@ -197,7 +193,7 @@ fun BoardOneScreen(
                             disabledContentColor = colorResource(id = R.color.on_surface_variant)
                         ),
                         modifier = Modifier.weight(1f),
-                        enabled = !isRolling && !isAITurn
+                        enabled = !isRolling,
                     ) {
                         Text("Roll")
                     }
@@ -205,16 +201,13 @@ fun BoardOneScreen(
                     Button(
                         onClick = {
                             viewModel.endTurn(GameBoard.PIG.modeName)
-                            if (gameMode is GameMode.VsAI) {
-                                viewModel.processAITurn()
-                            }
+
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary)
                         ),
                         modifier = Modifier.weight(1f),
-                        enabled = !isAITurn
                     ) {
                         Text("End Turn")
                     }
@@ -232,6 +225,7 @@ fun BoardOneScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
+                ConfettiAnimation()
                 AlertDialog(
                     containerColor = colorResource(id = R.color.surface),
                     titleContentColor = colorResource(id = R.color.on_surface),

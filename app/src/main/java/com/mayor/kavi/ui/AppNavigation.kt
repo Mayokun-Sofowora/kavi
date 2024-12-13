@@ -7,12 +7,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.*
 import com.mayor.kavi.authentication.signin.SignInScreen
 import com.mayor.kavi.authentication.signup.SignUpScreen
-import com.mayor.kavi.ui.screens.*
-import com.mayor.kavi.ui.screens.boards.BoardFiveScreen
-import com.mayor.kavi.ui.screens.boards.BoardFourScreen
-import com.mayor.kavi.ui.screens.boards.BoardOneScreen
-import com.mayor.kavi.ui.screens.boards.BoardThreeScreen
-import com.mayor.kavi.ui.screens.boards.BoardTwoScreen
+import com.mayor.kavi.ui.screens.modes.*
+import com.mayor.kavi.ui.screens.boards.*
+import com.mayor.kavi.ui.screens.main.*
 import com.mayor.kavi.ui.viewmodel.*
 
 @Composable
@@ -37,17 +34,18 @@ fun AppNavigation() {
         }
         // AR Screen
         composable(Routes.ArScreen.route) {}
-        // Game Selection Screen
+
+        // Board Games
+        composable(Routes.Boards.route) {
+            BoardsScreen(viewModel = diceViewModel, navController = navController)
+        }
+        // Play mode
         composable(Routes.PlayMode.route) {
             PlayModeScreen(
                 navController = navController,
                 diceViewModel = diceViewModel,
                 appViewModel = appViewModel
             )
-        }
-        // Board Games
-        composable(Routes.Boards.route) {
-            BoardsScreen(viewModel = diceViewModel, navController = navController)
         }
         // Game Boards
         composable("boardOne") {
@@ -67,7 +65,13 @@ fun AppNavigation() {
         }
 
         // Settings
-        composable(Routes.Settings.route) {}
+        composable(Routes.Settings.route) {
+            SettingsScreen(viewModel = diceViewModel, navController = navController)
+        }
+        // Statistics
+        composable(Routes.Statistics.route) {
+            StatisticsScreen(viewModel = diceViewModel, navController = navController)
+        }
         // Instructions
         composable(Routes.Instructions.route) {
             InstructionsScreen(onClose = { navController.popBackStack() })
@@ -97,6 +101,5 @@ sealed class Routes(val route: String) {
     object Instructions : Routes("instructions/full")
     object InstructionsShort : Routes("instructions/short")
     object Statistics : Routes("statistics")
-    object Achievements : Routes("achievements")
     object SignOut : Routes("signOut")
 }
