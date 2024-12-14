@@ -1,4 +1,3 @@
-// DiceViewModel.kt
 package com.mayor.kavi.ui.viewmodel
 
 import android.app.Application
@@ -16,11 +15,13 @@ import com.mayor.kavi.util.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
-import javax.inject.Inject
 import kotlin.random.Random
 import com.mayor.kavi.data.games.*
 import com.mayor.kavi.data.manager.*
-import dagger.assisted.Assisted
+import dagger.assisted.*
+import dagger.hilt.android.internal.Contexts.getApplication
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
 data class ScoreState(
     val currentTurnScore: Int = 0,
@@ -31,14 +32,14 @@ data class ScoreState(
 
 @HiltViewModel
 class DiceViewModel @Inject constructor(
-    application: Application,
+    @ApplicationContext private val context: Context,
     private val statisticsManager: StatisticsManager,
     private val gameRepository: GameRepository,
-    @Assisted private val multiplayerViewModel: MultiplayerViewModel,  // Fix injection
     private val shakeDetectionService: ShakeDetectionService,
-    val networkConnection: NetworkConnection
-) : AndroidViewModel(application) {
-    private val diceDataStore = DataStoreManager.Companion.getInstance(application)
+    val networkConnection: NetworkConnection,
+    private val multiplayerViewModel: MultiplayerViewModel
+) : ViewModel() {
+    private val diceDataStore = DataStoreManager.getInstance(context)
 
     // Settings & Board Selection
     private val _shakeEnabled = diceDataStore.getShakeEnabled().asLiveData()
@@ -109,10 +110,44 @@ class DiceViewModel @Inject constructor(
                 _isRolling.value = false
             }
         }
+        viewModelScope.launch {
+            multiplayerViewModel.gameSession.collect { session ->
+                when (session) {
+                    is Result.Success -> {
+                        handleMultiplayerGameState(session.data)
+                    }
+
+                    is Result.Error -> {
+                        Timber.e(session.exception, "Multiplayer session error")
+                    }
+
+                    else -> {
+                        _isRolling.value = true
+                    }
+                }
+            }
+        }
         resetGame()
     }
 
     // Handle connection between Multiplayer and dice view model
+    private suspend fun handleMultiplayerGameState(gameSession: GameSession) {
+        if (gameSession.currentTurn != gameRepository.getCurrentUserId()) {
+            // Update game state based on opponent's move
+            val diceResults = (gameSession.gameState["diceResults"] as? List<Int>) ?: return
+            val score = (gameSession.gameState["score"] as? Int) ?: return
+
+            updateDiceImages(diceResults)
+            when (_selectedBoard.value) {
+                GameBoard.PIG.modeName -> processPigRoll(diceResults.first())
+                GameBoard.GREED.modeName -> processGreedRoll(diceResults)
+                GameBoard.MEXICO.modeName -> processMexicoRoll(diceResults)
+                GameBoard.CHICAGO.modeName -> processChicagoRoll(diceResults)
+                GameBoard.BALUT.modeName -> processBalutRoll(diceResults)
+            }
+        }
+    }
+
     fun handleMultiplayerRoll(sessionId: String, diceResults: List<Int>, score: Int) {
         viewModelScope.launch {
             when (val currentSession = multiplayerViewModel.gameSession.value) {
@@ -151,10 +186,28 @@ class DiceViewModel @Inject constructor(
         val diceCount = getDiceCountForBoard(selectedBoard)
         val results = generateDiceRolls(diceCount)
         updateDiceImages(results)
-        processRollResults(selectedBoard, results)
+
+        // Handle multiplayer updates
+        when (playMode.value) {
+            is PlayMode.Multiplayer -> {
+                val session = (playMode.value as PlayMode.Multiplayer).sessionId
+                processRollResults(selectedBoard, results)
+                handleMultiplayerRoll(session, results, _scoreState.value.currentTurnScore)
+            }
+            PlayMode.SinglePlayer -> {
+                processRollResults(selectedBoard, results)
+                if (_scoreState.value.isGameOver) {
+                    statisticsManager.updateGameStats(
+                        board = GameBoard.valueOf(selectedBoard.uppercase()),
+                        score = _scoreState.value.overallScore,
+                        isWin = true
+                    )
+                }
+            }
+        }
 
         delay(2000)
-        _isRolling.value = false  // End rolling animation
+        _isRolling.value = false
     }
 
     private fun validateBoard(board: String): Boolean {
@@ -181,7 +234,7 @@ class DiceViewModel @Inject constructor(
     }
 
     // Process Rolls for the results and for each board
-    private fun processRollResults(board: String, results: List<Int>) {
+    private suspend fun processRollResults(board: String, results: List<Int>) {
         when (board) {
             GameBoard.PIG.modeName -> processPigRoll(results.first())
             GameBoard.GREED.modeName -> processGreedRoll(results)
@@ -191,7 +244,7 @@ class DiceViewModel @Inject constructor(
         }
     }
 
-    private fun processPigRoll(result: Int) {
+    private suspend fun processPigRoll(result: Int) {
         if (result == 1) {
             _scoreState.value = _scoreState.value.copy(
                 currentTurnScore = 0,
@@ -376,16 +429,40 @@ class DiceViewModel @Inject constructor(
     }
 
     // Update the endTurn function to trigger confetti on win
-    fun endTurn(board: String = _selectedBoard.value) {
+    suspend fun endTurn(board: String = _selectedBoard.value) {
         val currentScore = _scoreState.value.overallScore + _scoreState.value.currentTurnScore
         val isGameOver = currentScore >= (winConditions[board] ?: Int.MAX_VALUE)
+
         _scoreState.value = ScoreState(
             overallScore = currentScore,
             isGameOver = isGameOver,
             resultMessage = if (isGameOver) "Game Over! Final Score: $currentScore" else currentScore.toString()
         )
+
         if (isGameOver) {
             triggerConfetti()
+            when (playMode.value) {
+                is PlayMode.Multiplayer -> {
+                    val session = (playMode.value as PlayMode.Multiplayer).sessionId
+                    viewModelScope.launch {
+                        multiplayerViewModel.endGame(session, currentScore)
+                        // Update statistics for multiplayer game
+                        statisticsManager.updateGameStats(
+                            board = GameBoard.valueOf(board.uppercase()),
+                            score = currentScore,
+                            isWin = true
+                        )
+                    }
+                }
+                PlayMode.SinglePlayer -> {
+                    // Update statistics for single player game
+                    statisticsManager.updateGameStats(
+                        board = GameBoard.valueOf(board.uppercase()),
+                        score = currentScore,
+                        isWin = true
+                    )
+                }
+            }
         }
     }
 
@@ -446,12 +523,11 @@ class DiceViewModel @Inject constructor(
         if (!_vibrationEnabled.value) return
 
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = getApplication<Application>()
-                .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
-            getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
     }

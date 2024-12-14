@@ -7,22 +7,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.BoardColors
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.games.*
 import com.mayor.kavi.data.manager.LocalSettingsManager
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
 import com.mayor.kavi.ui.components.DiceRollAnimation
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,6 +34,7 @@ fun BoardTwoScreen(
     var showWinDialog by remember { mutableStateOf(false) }
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
+    val coroutineScope = rememberCoroutineScope()
 
     // Back handler
     BackHandler(enabled = true) {
@@ -210,7 +207,11 @@ fun BoardTwoScreen(
                     }
 
                     Button(
-                        onClick = { viewModel.endTurn(GameBoard.GREED.modeName) },
+                        onClick = {
+                            coroutineScope.launch {
+                                viewModel.endTurn(GameBoard.GREED.modeName)
+                            }
+                                  },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary),
