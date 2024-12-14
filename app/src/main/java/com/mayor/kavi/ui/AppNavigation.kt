@@ -7,6 +7,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.*
 import com.mayor.kavi.authentication.signin.SignInScreen
 import com.mayor.kavi.authentication.signup.SignUpScreen
+import com.mayor.kavi.ui.screens.*
 import com.mayor.kavi.ui.screens.modes.*
 import com.mayor.kavi.ui.screens.boards.*
 import com.mayor.kavi.ui.screens.main.*
@@ -63,7 +64,6 @@ fun AppNavigation() {
         composable("boardFive") {
             BoardFiveScreen(viewModel = diceViewModel, navController = navController)
         }
-
         // Settings
         composable(Routes.Settings.route) {
             SettingsScreen(viewModel = diceViewModel, navController = navController)
@@ -86,6 +86,26 @@ fun AppNavigation() {
         composable(Routes.SignOut.route) {
             SignInScreen(navController = navController)
         }
+        // Player Selection
+        composable(Routes.PlayerSelection.route) {
+            PlayerSelectionScreen(
+                multiplayerViewModel = hiltViewModel(),
+                onPlayerSelected = { playerId ->
+                    navController.navigate(Routes.WaitingRoom.route)
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        // Waiting Room
+        composable(Routes.WaitingRoom.route) {
+            WaitingRoomScreen(
+                multiplayerViewModel = hiltViewModel(),
+                onGameStart = {
+                    navController.navigate(Routes.Boards.route)
+                },
+                onCancel = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -97,6 +117,8 @@ sealed class Routes(val route: String) {
     object ArScreen : Routes("arScreen")
     object Boards : Routes("classicBoards")
     object PlayMode : Routes("playMode")
+    object PlayerSelection : Routes("playerSelection")
+    object WaitingRoom : Routes("waitingRoom")
     object Settings : Routes("settings")
     object Instructions : Routes("instructions/full")
     object InstructionsShort : Routes("instructions/short")
