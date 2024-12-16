@@ -22,9 +22,13 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InstructionsScreen(onClose: () -> Unit, startPage: Int = 0, showOnlyPage: Boolean = false) {
+fun InstructionsScreen(
+    onClose: () -> Unit,
+    startPage: Int = 0,
+    showOnlyPage: Boolean = false
+) {
     val pagerState =
-        rememberPagerState(initialPage = startPage, initialPageOffsetFraction = 0.0f) { 6 }
+        rememberPagerState(initialPage = startPage, initialPageOffsetFraction = 0.0f, pageCount = { 6 })
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -99,12 +103,12 @@ fun InstructionsScreen(onClose: () -> Unit, startPage: Int = 0, showOnlyPage: Bo
                                     else -> "More Info"
                                 },
                                 description = when (page) {
-                                    0 -> "Kavi is a dynamic dice game offering strategic gameplay in both augmented reality (AR) and classic board game modes. " +
-                                            "Compete to outscore your opponents or the AI by rolling dice, making calculated decisions, and mastering scoring categories."
+                                    0 -> "Kavi is an exciting dice game that combines strategic gameplay with immersive augmented reality (AR) and classic board game modes. " +
+                                            "Compete to outscore your opponents or challenge the AI by rolling dice, making calculated decisions, and mastering unique scoring categories."
 
                                     1 -> "Kavi offers two distinct play modes:\n" +
-                                            "• AR Mode: Interact with virtual dice in a visually immersive AR environment. You can roll AR dice or use the dice recognition feature" +
-                                            " to input results from physical dice.\n" +
+                                            "• Virtual Mode: Interact with virtual dice in a visually immersive AR environment. " +
+                                            "You can roll AR dice or use the dice recognition feature to input results from physical dice.\n" +
                                             "• Classic Mode: Play the classic dice games, focusing on strategy and dice rolling. " +
                                             "Choose from various scoring boards for unique gameplay experiences."
 
@@ -117,27 +121,27 @@ fun InstructionsScreen(onClose: () -> Unit, startPage: Int = 0, showOnlyPage: Bo
                                             "• Highest Score: At the end of all rounds, the player with the highest total score wins.\n" +
                                             "• Bonus Victory: Some boards like pig allow early wins through bonuses or special conditions."
 
-                                    4 -> "Choose from a variety of unique boards:\n" +
-                                            "• [Pig Dice Game] (Two or more players):  A fast-paced, strategic game where the goal is to be the first to reach 100 points. " +
-                                            "Players roll a single die to determine who goes first, with the highest roll starting. " +
-                                            "The starting player then rolls again, adding to their score as long as they avoid rolling a 1 or choose to end their turn to bank their points. " +
-                                            "Rolling a 1 ends the turn with no points earned for that round. " +
-                                            "The game concludes when a player reaches 100 points, declaring them the winner.\n\n" +
-                                            "• [Greed (10,000)](Two or more players): A popular game where the goal is to accumulate 10,000 points by rolling combinations for high scores." +
-                                            "All Players roll their dice, and the player with the highest score starts the game. A player's turn starts by rolling all six dice. " +
-                                            "After each roll, players may set aside dice that form scoring combinations. At least one scoring die must be set aside per roll; " +
-                                            "otherwise, the turn ends, and no points are scored for that round. Players may re-roll remaining dice or stop their turn and bank their score. " +
-                                            "Scoring combinations include Single 1 (100 points), Single 5 (50 points), and various multiples of a kind.\n\n" +
-                                            "• [Mexico Dice Game] (Two or more players): A bluffing game where players aim to score the most points by taking risks. Each player starts with 6 lives. " +
-                                            "Players roll dice and set a score for each round. They can opt to challenge opponents’ rolls or bluff, risking lives in the process.\n\n" +
-                                            "• [Chicago Dice Game] (Two or more players): Players score points based on round-specific targets, making it a strategic and competitive game where each round has a unique challenge. Players roll dice, set aside combinations that meet the round's target, and can re-roll the remaining dice to complete their goal. The game is played over multiple rounds with different targets each round, such as three of a kind, full house, or straights. The player with the highest score at the end of all rounds wins.\n\n" +
-                                            "• [Balut Dice Game] (Three or more players): A poker-like dice game with strategic play, where players aim to form combinations to score points, including Full House, Straights, Four of a Kind, and more. Each turn, players roll five dice and try to form scoring combinations, keeping some dice and re-rolling others to complete the combinations. Points are scored based on the achieved combinations, and the game is played over multiple rounds. The player with the highest total score at the end of the game wins."
+                                    4 -> "How to play the boards:\n" +
+                                            "• Pig Dice Game: Roll a single die. If you roll a 1, you lose all points for the turn. " +
+                                            "Otherwise, add the die's value to the turn score. The first to 100 total points wins." +
+                                            "\n\n" +
+                                            "• Greed (10,000): Score points by rolling combinations. Ones are worth 100 points and fives are worth 50 points. " +
+                                            "Three or more of the same number scores big, like 1000 points for three 1s. " +
+                                            "Rolling no scoring dice or re-rolling for no scoring dice, ends the turn." +
+                                            "\n\n" +
+                                            "• Mexico Dice Game: Use two dice, aiming for the highest number. México (a 2 and a 1) is worth 21. Doubles are score x 11. " +
+                                            "Otherwise the score is the biggest x 10 + the smallest.\n\n" +
+                                            "• Chicago Dice Game: Roll two dice and score points for matching a round number with the sum of your dice. " +
+                                            "The rounds are played in order 2 - 12. The highest score after round 12 wins the game.\n\n" +
+                                            "• Balut Dice Game: A poker-like game, similar to Yahtzee, uses five dice and can be played with two or more players. " +
+                                            "Each round you need to assign your dice results to different scoring categories, the player with the most points at the end of all categories wins the game."
 
                                     5 -> "Master Kavi with these tips:\n" +
                                             "• Balance Risk and Reward: Know when to re-roll or settle.\n" +
                                             "• Adapt to Modes: Use AR for an interactive experience or classic for traditional strategy.\n" +
                                             "• Plan Ahead: Keep an eye on available categories.\n" +
-                                            "• Learn Boards: Each board type has unique scoring and strategies."
+                                            "•  Learn the Boards: Each board type offers unique scoring rules and strategies. " +
+                                            "In games like Greed and Balut, you can lock the dice you don't want to reroll by simply tapping on them."
 
                                     else -> "Kavi combines luck and strategy. Master the nuances, challenge your friends, and become the ultimate Kavi champion!"
                                 },
@@ -214,7 +218,7 @@ fun InstructionPage(title: String, description: String, imageRes: Int?) {
             text = title,
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 30.sp,
+                fontSize = 28.sp,
                 shadow = Shadow(
                     color = Color.Gray,
                     offset = Offset(1f, 1f),
@@ -239,14 +243,17 @@ fun InstructionPage(title: String, description: String, imageRes: Int?) {
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(26.dp))
 
         Text(
             text = description,
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
-            color = Color(0xFF4A3B2F),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 20.sp,
+                lineHeight = 24.sp
+            ),
+            color = Color(0xFFFFFFFF),
             textAlign = TextAlign.Start,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 8.dp)
         )
     }
 }

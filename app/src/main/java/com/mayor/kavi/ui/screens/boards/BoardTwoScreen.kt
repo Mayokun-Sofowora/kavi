@@ -1,13 +1,15 @@
 package com.mayor.kavi.ui.screens.boards
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,6 +37,8 @@ fun BoardTwoScreen(
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
     val coroutineScope = rememberCoroutineScope()
+    val heldDice by viewModel.heldDice.collectAsState()
+    val greedState by viewModel.greedScoreState.collectAsState()
 
     // Back handler
     BackHandler(enabled = true) {
@@ -57,8 +61,9 @@ fun BoardTwoScreen(
         }
     }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
     ) {
         Scaffold(
             topBar = {
@@ -88,7 +93,13 @@ fun BoardTwoScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(color = BoardColors.getColor(boardColor))
+                    .then(
+                        when (val color = BoardColors.getColor(boardColor)) {
+                            is Color -> Modifier.background(color = color)
+                            is Brush -> Modifier.background(brush = color)
+                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                        }
+                    )
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -104,12 +115,28 @@ fun BoardTwoScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        diceImages.take(3).forEach { diceImage ->
-                            DiceRollAnimation(
-                                isRolling = isRolling,
-                                diceImage = diceImage,
-                                modifier = Modifier.size(100.dp)
-                            )
+                        diceImages.take(3).forEachIndexed { index, diceImage ->
+                            Box(
+                                modifier = Modifier
+                                    .clickable(
+                                        enabled = !isRolling,
+                                        onClick = { viewModel.toggleDiceHold(index) }
+                                    )
+                                    .background(
+                                        color = if (heldDice.contains(index)) colorResource(id = R.color.scrim).copy(
+                                            alpha = 0.2f
+                                        ) else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp) // Apply rounded corners to the background too
+                                    )
+                                    .padding(4.dp)
+                            ) {
+                                DiceRollAnimation(
+                                    isRolling = isRolling && !heldDice.contains(index),
+                                    diceImage = diceImage,
+                                    modifier = Modifier.size(100.dp)
+                                )
+                            }
+
                         }
                     }
 
@@ -118,12 +145,28 @@ fun BoardTwoScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        diceImages.drop(3).take(3).forEach { diceImage ->
-                            DiceRollAnimation(
-                                isRolling = isRolling,
-                                diceImage = diceImage,
-                                modifier = Modifier.size(100.dp)
-                            )
+                        diceImages.drop(3).take(3).forEachIndexed { index, diceImage ->
+                            val index = index + 3
+                            Box(
+                                modifier = Modifier
+                                    .clickable(
+                                        enabled = !isRolling,
+                                        onClick = { viewModel.toggleDiceHold(index) }
+                                    )
+                                    .background(
+                                        color = if (heldDice.contains(index)) colorResource(id = R.color.scrim).copy(
+                                            alpha = 0.2f
+                                        ) else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp) // Apply rounded corners to the background too
+                                    )
+                                    .padding(4.dp)
+                            ) {
+                                DiceRollAnimation(
+                                    isRolling = isRolling && !heldDice.contains(index),
+                                    diceImage = diceImage,
+                                    modifier = Modifier.size(100.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -148,7 +191,7 @@ fun BoardTwoScreen(
                         )
                         Text(
                             text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         HorizontalDivider(
@@ -167,7 +210,7 @@ fun BoardTwoScreen(
                                     style = MaterialTheme.typography.labelMedium
                                 )
                                 Text(
-                                    text = "${scoreState.overallScore}",
+                                    text = if (greedState.resultMessage.isEmpty()) "0" else greedState.resultMessage,
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
@@ -177,7 +220,7 @@ fun BoardTwoScreen(
                                     style = MaterialTheme.typography.labelMedium
                                 )
                                 Text(
-                                    text = "${scoreState.currentTurnScore}",
+                                    text = "${greedState.turnScore}",
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
@@ -209,9 +252,9 @@ fun BoardTwoScreen(
                     Button(
                         onClick = {
                             coroutineScope.launch {
-                                viewModel.endTurn(GameBoard.GREED.modeName)
+                                viewModel.bankGreedScore()
                             }
-                                  },
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary),
@@ -223,12 +266,10 @@ fun BoardTwoScreen(
                         Text("Bank Score")
                     }
                 }
-
                 DiceResultImage(
                     gameMode = GameBoard.GREED.modeName,
                     diceResult = scoreState.resultMessage
                 )
-
             }
         }
 
@@ -242,14 +283,14 @@ fun BoardTwoScreen(
                     containerColor = colorResource(id = R.color.surface),
                     titleContentColor = colorResource(id = R.color.on_surface),
                     textContentColor = colorResource(id = R.color.on_surface),
-                    onDismissRequest = { showWinDialog = false },
+                    onDismissRequest = { navController.popBackStack() },
                     title = { Text("Congratulations!") },
                     text = { Text("You reached 10,000 points!") },
                     confirmButton = {
                         Button(
                             onClick = {
-                                viewModel.resetGame()
                                 showWinDialog = false
+                                viewModel.resetGame()
                             }, colors = ButtonDefaults.buttonColors(
                                 containerColor = colorResource(id = R.color.primary),
                                 contentColor = colorResource(id = R.color.on_primary)
@@ -261,11 +302,11 @@ fun BoardTwoScreen(
                     dismissButton = {
                         Button(
                             onClick = {
-                                viewModel.resetGame()
                                 navController.navigate(Routes.Boards.route) {
                                     popUpTo(Routes.Boards.route) { inclusive = true }
                                 }
                                 showWinDialog = false
+                                viewModel.resetGame()
                             }, colors = ButtonDefaults.buttonColors(
                                 containerColor = colorResource(id = R.color.primary),
                                 contentColor = colorResource(id = R.color.on_primary)
@@ -281,17 +322,19 @@ fun BoardTwoScreen(
 
         // Exit dialog
         if (showExitGameDialog) {
-            AlertDialog(
+            AlertDialog(containerColor = colorResource(id = R.color.surface),
+                titleContentColor = colorResource(id = R.color.on_surface),
+                textContentColor = colorResource(id = R.color.on_surface),
                 onDismissRequest = { showExitGameDialog = false },
                 title = { Text("Exit Game?") },
                 text = { Text("Are you sure you want to exit? Your progress will be lost.") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            viewModel.resetGame()
                             navController.navigate(Routes.Boards.route) {
                                 popUpTo(Routes.Boards.route) { inclusive = true }
                             }
+                            viewModel.resetGame()
                         }, colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary)

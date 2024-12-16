@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -96,7 +97,13 @@ fun BoardOneScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(color = BoardColors.getColor(boardColor))
+                    .then(
+                        when (val color = BoardColors.getColor(boardColor)) {
+                            is Color -> Modifier.background(color = color)
+                            is Brush -> Modifier.background(brush = color)
+                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                        }
+                    )
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -139,7 +146,7 @@ fun BoardOneScreen(
                         )
                         Text(
                             text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         HorizontalDivider(
@@ -175,7 +182,7 @@ fun BoardOneScreen(
                         }
                     }
                 }
-
+                Spacer(modifier = Modifier.height(24.dp))
                 // Game controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -200,7 +207,7 @@ fun BoardOneScreen(
                     Button(
                         onClick = {
                             coroutineScope.launch {
-                                viewModel.endTurn(GameBoard.PIG.modeName)
+                                viewModel.endPigTurn()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -217,6 +224,7 @@ fun BoardOneScreen(
                     gameMode = GameBoard.PIG.modeName,
                     diceResult = scoreState.resultMessage
                 )
+
             }
         }
 
@@ -230,14 +238,14 @@ fun BoardOneScreen(
                     containerColor = colorResource(id = R.color.surface),
                     titleContentColor = colorResource(id = R.color.on_surface),
                     textContentColor = colorResource(id = R.color.on_surface),
-                    onDismissRequest = { showWinDialog = false },
+                    onDismissRequest = { navController.popBackStack() },
                     title = { Text("Congratulations!") },
                     text = { Text("You win with ${scoreState.overallScore} points!") },
                     confirmButton = {
                         Button(
                             onClick = {
-                                viewModel.resetGame()
                                 showWinDialog = false
+                                viewModel.resetGame()
                             }, colors = ButtonDefaults.buttonColors(
                                 containerColor = colorResource(id = R.color.primary),
                                 contentColor = colorResource(id = R.color.on_primary)
@@ -249,11 +257,11 @@ fun BoardOneScreen(
                     dismissButton = {
                         Button(
                             onClick = {
-                                viewModel.resetGame()
                                 navController.navigate(Routes.Boards.route) {
                                     popUpTo(Routes.Boards.route) { inclusive = true }
                                 }
                                 showWinDialog = false
+                                viewModel.resetGame()
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colorResource(id = R.color.primary),
@@ -271,17 +279,19 @@ fun BoardOneScreen(
 
     // Add Exit Game Dialog
     if (showExitGameDialog) {
-        AlertDialog(
+        AlertDialog(containerColor = colorResource(id = R.color.surface),
+            titleContentColor = colorResource(id = R.color.on_surface),
+            textContentColor = colorResource(id = R.color.on_surface),
             onDismissRequest = { showExitGameDialog = false },
             title = { Text("Exit Game?") },
             text = { Text("Are you sure you want to exit? Your progress will be lost.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.resetGame()
                         navController.navigate(Routes.Boards.route) {
                             popUpTo(Routes.Boards.route) { inclusive = true }
                         }
+                        viewModel.resetGame()
                     }, colors = ButtonDefaults.buttonColors(
                         containerColor = colorResource(id = R.color.primary),
                         contentColor = colorResource(id = R.color.on_primary)

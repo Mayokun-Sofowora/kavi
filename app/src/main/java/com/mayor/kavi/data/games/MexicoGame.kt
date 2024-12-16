@@ -1,8 +1,13 @@
 package com.mayor.kavi.data.games
 
 data class MexicoScoreState(
-    val currentRound: Int = 1,
-    val lives: Int = 6,
-    val isFirstRound: Boolean = true,
-    val roundScores: MutableList<Int> = mutableListOf()
+    val roundScores: MutableList<Int> = mutableListOf(),
+    val lives: Int = 3,
+    val roundTimeSeconds: Int = 15,
+    val isTimerRunning: Boolean = false,
+    val currentRoundNumber: Int = 1,
+    val highestScore: Int = 0,
+    val isGameOver: Boolean = false,
+    val gameStatus: String = "",
+    val resultMessage: String = ""
 )

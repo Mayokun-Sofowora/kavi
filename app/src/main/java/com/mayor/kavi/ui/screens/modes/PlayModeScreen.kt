@@ -127,9 +127,20 @@ fun PlayModeScreen(
                     }
 
                     is Result.Loading -> {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
+                        // Show loading state with preserved data if available
+                        val preservedProfile = (userProfileState as Result.Loading).data
+                        Text(
+                            text = "Welcome, ${preservedProfile?.name ?: "Guest"}!",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.3f),
+                                    offset = Offset(2f, 2f),
+                                    blurRadius = 3f
+                                )
+                            ),
+                            textAlign = TextAlign.Center
                         )
                     }
 
@@ -138,7 +149,12 @@ fun PlayModeScreen(
                             text = "Welcome, Guest!",
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.3f),
+                                    offset = Offset(2f, 2f),
+                                    blurRadius = 3f
+                                )
                             ),
                             textAlign = TextAlign.Center
                         )

@@ -66,10 +66,6 @@ class DataStoreManager(context: Context) {
             preferences[SHAKE_ENABLED_KEY] ?: DEFAULT_SHAKE_ENABLED
         }
 
-    // Board color Setting
-
-
-
     suspend fun setVibrationEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[VIBRATION_ENABLED_KEY] = enabled

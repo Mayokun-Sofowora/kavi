@@ -5,10 +5,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.mayor.kavi.data.GameRepository
-import com.mayor.kavi.data.games.GameBoard
-import kotlinx.coroutines.Dispatchers
+import com.mayor.kavi.data.games.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -17,36 +16,31 @@ import org.tensorflow.lite.support.common.FileUtil
 import timber.log.Timber
 import kotlin.math.*
 
-
-data class DetailedGameStats(
-    val gamesPlayed: Int = 0,
-    val highScores: Map<String, Int> = emptyMap(),
-    val winRates: Map<String, Pair<Int, Int>> = emptyMap(),
-    val averageScores: Map<String, Double> = emptyMap(),
-    val playTime: Map<String, Long> = emptyMap(),
-    val preferredBoards: List<String> = emptyList(),
-    val recentScores: List<GameResult> = emptyList()
-)
-
-data class GameResult(
-    val board: String,
-    val score: Int,
-    val timestamp: Long,
-    val duration: Long,
-    val isWin: Boolean
-)
-
 data class GameStats(
     val gamesPlayed: Int,
     val highScores: Map<String, Int>,
-    val winRates: Map<String, Pair<Int, Int>>
+    val winRates: Map<String, Pair<Int, Int>>,
+    val shakeRates: List<Pair<Long, Int>>
 )
 
 data class PlayerAnalysis(
     val predictedWinRate: Float,
     val consistency: Float,
     val improvement: Float,
-    val playStyle: PlayStyle
+    val playStyle: PlayStyle = PlayStyle.BALANCED,
+    val trends: List<TrendPoint> = emptyList()
+)
+
+data class TrendPoint(
+    val turnNumber: Int,
+    val score: Int,
+    val decision: String
+)
+
+data class ScoreState(
+    val currentTurnScore: Int = 0,
+    val overallScore: Int = 0,
+    val winRates: Map<String, Pair<Int, Int>> = emptyMap()
 )
 
 enum class PlayStyle {
@@ -58,28 +52,49 @@ enum class PlayStyle {
  */
 class StatisticsManager @Inject constructor(
     private val context: Context,
-    private val gameRepository: GameRepository
+    gameRepository: GameRepository
 ) {
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "statistics")
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dataStore = context.dataStore
-    private var interpreter: Interpreter? = null
+    private var currentUserId: String? = null
 
-    init {
-        loadTensorFlowModel()
+    companion object {
+        private const val MODEL_VERSION = "1.0.0"
+        private val MODEL_VERSION_KEY = stringPreferencesKey("model_version")
+
+        // Function to create keys based on user ID
+        private fun gamesPlayedKey(userId: String) = intPreferencesKey("GAMES_PLAYED_$userId")
+        private fun highScoresKey(userId: String) = stringPreferencesKey("HIGH_SCORES_$userId")
+        private fun winRatesKey(userId: String) = stringPreferencesKey("WIN_RATES_$userId")
+        private fun shakeRatesKey(userId: String) = stringPreferencesKey("shake_rates_$userId")
+
     }
 
-    private fun loadTensorFlowModel() {
-        try {
-            val modelFile = "dice_stats_model.tflite"
-            val model = FileUtil.loadMappedFile(context, modelFile)
-            val options = Interpreter.Options()
-            interpreter = Interpreter(model, options)
-        } catch (e: Exception) {
-            Timber.e(e, "Error loading TensorFlow model")
+    private var interpreter: Interpreter? = null
+
+    // Score state flows
+    private val _scoreState = MutableStateFlow(ScoreState())
+    val scoreState: StateFlow<ScoreState> = _scoreState
+    private val _balutScoreState = MutableStateFlow(BalutScoreState())
+    val balutScoreState: StateFlow<BalutScoreState> = _balutScoreState
+    private val _chicagoScoreState = MutableStateFlow(ChicagoScoreState())
+    val chicagoScoreState: StateFlow<ChicagoScoreState> = _chicagoScoreState
+    private val _mexicoScoreState = MutableStateFlow(MexicoScoreState())
+
+    // Player analysis flow
+    private val _playerAnalysis = MutableStateFlow<PlayerAnalysis?>(null)
+    val playerAnalysis: StateFlow<PlayerAnalysis?> = _playerAnalysis
+    private var _shakeCount = 0
+
+    init {
+        scope.launch {
+            loadTensorFlowModel()
+            checkModelVersion()
         }
     }
 
-    suspend fun analyzePlayerStats(gameStats: GameStats): PlayerAnalysis {
+    private suspend fun analyzePlayerStats(gameStats: GameStats): PlayerAnalysis {
         return withContext(Dispatchers.Default) {
             val input = prepareInputData(gameStats)
             val outputArray =
@@ -91,8 +106,56 @@ class StatisticsManager @Inject constructor(
                 predictedWinRate = outputArray[0][0],
                 consistency = outputArray[0][1],
                 improvement = outputArray[0][2],
-                playStyle = interpretPlayStyle(outputArray[0][3])
+                playStyle = determinePlayStyle(outputArray[0][3])
             )
+        }
+    }
+
+    suspend fun clearUserStats(userId: String) {
+        dataStore.edit { prefs ->
+            prefs.remove(gamesPlayedKey(userId))
+            prefs.remove(highScoresKey(userId))
+            prefs.remove(winRatesKey(userId))
+            prefs.remove(shakeRatesKey(userId))
+        }
+        _shakeCount = 0
+    }
+
+    private fun loadTensorFlowModel() {
+        try {
+            val modelFile = "dice_stats_model.tflite"
+            val model = FileUtil.loadMappedFile(context, modelFile)
+            val options = Interpreter.Options().apply {
+                setNumThreads(2)
+            }
+            interpreter = Interpreter(model, options)
+            if (!validateModel()) {
+                Timber.w("The tensorflow model was invalid")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error loading TensorFlow model")
+        }
+    }
+
+    private suspend fun checkModelVersion() {
+        val currentVersion = dataStore.data.first()[MODEL_VERSION_KEY]
+        if (currentVersion != MODEL_VERSION) {
+            // Reload model if version mismatch
+            loadTensorFlowModel()
+            dataStore.edit { preferences ->
+                preferences[MODEL_VERSION_KEY] = MODEL_VERSION
+            }
+        }
+    }
+
+    private fun validateModel(): Boolean {
+        return try {
+            val inputShape = interpreter?.getInputTensor(0)?.shape()
+            val outputShape = interpreter?.getOutputTensor(0)?.shape()
+            inputShape?.get(1) == 4 && outputShape?.get(1) == 4
+        } catch (e: Exception) {
+            Timber.tag("StatisticsManager").d(e, "Model validation failed")
+            false
         }
     }
 
@@ -131,78 +194,113 @@ class StatisticsManager @Inject constructor(
         } else 0f
     }
 
-    private fun interpretPlayStyle(value: Float): PlayStyle {
-        return when {
-            value < 0.3 -> PlayStyle.CAUTIOUS
-            value < 0.6 -> PlayStyle.BALANCED
-            else -> PlayStyle.AGGRESSIVE
-        }
-    }
-
-    suspend fun updateGameStats(
-        board: GameBoard,
-        score: Int,
-        isWin: Boolean,
-        duration: Long = 0
-    ) {
-        dataStore.edit { prefs ->
-            // Update games played
-            val currentGamesPlayed = prefs[GAMES_PLAYED_KEY] ?: 0
-            prefs[GAMES_PLAYED_KEY] = currentGamesPlayed + 1
-
-            // Update high scores
-            val highScores = prefs[HIGH_SCORES_KEY]?.let {
-                Json.decodeFromString<Map<String, Int>>(it)
-            } ?: emptyMap()
-
-            val updatedHighScores = highScores.toMutableMap().apply {
-                val currentHigh = this[board.modeName] ?: 0
-                if (score > currentHigh) {
-                    this[board.modeName] = score
+    suspend fun updateGameStats(board: GameBoard, score: Int, isWin: Boolean) {
+        currentUserId?.let { userId ->
+            dataStore.edit { prefs ->
+                if (isWin) {
+                    // Only increment games played if the game is over
+                    val currentGamesPlayed = prefs[gamesPlayedKey(userId)] ?: 0
+                    prefs[gamesPlayedKey(userId)] = currentGamesPlayed + 1
                 }
-            }
-            prefs[HIGH_SCORES_KEY] = Json.encodeToString(updatedHighScores)
+                // Update win rates
+                val winRates = prefs[winRatesKey(userId)]?.let {
+                    Json.decodeFromString<Map<String, Pair<Int, Int>>>(it)
+                } ?: emptyMap()
 
-            // Update win rates
-            val winRates = prefs[WIN_RATES_KEY]?.let {
-                Json.decodeFromString<Map<String, Pair<Int, Int>>>(it)
-            } ?: emptyMap()
+                val updatedWinRates = winRates.toMutableMap().apply {
+                    val current = this[board.modeName] ?: (0 to 0)
+                    // Increment total games and wins if applicable
+                    this[board.modeName] =
+                        (current.first + if (isWin) 1 else 0) to (current.second + 1)
+                }
+                prefs[winRatesKey(userId)] = Json.encodeToString(updatedWinRates)
 
-            val updatedWinRates = winRates.toMutableMap().apply {
-                val current = this[board.modeName] ?: (0 to 0)
-                this[board.modeName] = (current.first + if (isWin) 1 else 0) to (current.second + 1)
+                // Update high scores
+                val highScores = prefs[highScoresKey(userId)]?.let {
+                    Json.decodeFromString<Map<String, Int>>(it)
+                } ?: emptyMap()
+
+                val updatedHighScores = highScores.toMutableMap().apply {
+                    val currentHigh = this[board.modeName] ?: 0
+                    if (score > currentHigh) {
+                        this[board.modeName] = score
+                    }
+                }
+                prefs[highScoresKey(userId)] = Json.encodeToString(updatedHighScores)
             }
-            prefs[WIN_RATES_KEY] = Json.encodeToString(updatedWinRates)
         }
-    }
-
-    private fun calculateNewAverages(
-        currentAverages: Map<String, Double>,
-        board: String,
-        newScore: Int
-    ): Map<String, Double> {
-        val updatedAverages = currentAverages.toMutableMap()
-        val currentAverage = currentAverages[board] ?: 0.0
-        val gamesPlayed = (currentAverages[board]?.toInt() ?: 0) + 1
-        updatedAverages[board] = (currentAverage * (gamesPlayed - 1) + newScore) / gamesPlayed
-        return updatedAverages
     }
 
     fun getGameStats(): Flow<GameStats> = dataStore.data.map { prefs ->
+        val userId = currentUserId ?: ""
         GameStats(
-            gamesPlayed = prefs[GAMES_PLAYED_KEY] ?: 0,
-            highScores = prefs[HIGH_SCORES_KEY]?.let {
+            gamesPlayed = prefs[gamesPlayedKey(userId)] ?: 0,
+            highScores = prefs[highScoresKey(userId)]?.let {
                 Json.decodeFromString<Map<String, Int>>(it)
             } ?: emptyMap(),
-            winRates = prefs[WIN_RATES_KEY]?.let {
+            winRates = prefs[winRatesKey(userId)]?.let {
                 Json.decodeFromString<Map<String, Pair<Int, Int>>>(it)
-            } ?: emptyMap()
+            } ?: emptyMap(),
+            shakeRates = prefs[shakeRatesKey(userId)]?.let {
+                Json.decodeFromString<List<Pair<Long, Int>>>(it)
+            } ?: emptyList()
         )
     }
 
-    companion object {
-        private val GAMES_PLAYED_KEY = intPreferencesKey("GAMES_PLAYED")
-        private val HIGH_SCORES_KEY = stringPreferencesKey("HIGH_SCORES")
-        private val WIN_RATES_KEY = stringPreferencesKey("WIN_RATES")
+    suspend fun updateShakeRate() {
+        _shakeCount++
+        currentUserId?.let { userId ->
+            dataStore.edit { prefs ->
+                val currentRates = prefs[shakeRatesKey(userId)]?.let {
+                    Json.decodeFromString<List<Pair<Long, Int>>>(it)
+                } ?: emptyList()
+
+                val newRate = Pair(System.currentTimeMillis(), _shakeCount)
+                val updatedRates = (currentRates + newRate).takeLast(10)
+
+                prefs[shakeRatesKey(userId)] = Json.encodeToString(updatedRates)
+            }
+        }
     }
+
+    // New functions to update score states
+    fun updateScoreState(newScore: Int) {
+        _scoreState.value = _scoreState.value.copy(currentTurnScore = newScore)
+    }
+
+    fun updateBalutScoreState(newBalutState: BalutScoreState) {
+        _balutScoreState.value = newBalutState
+    }
+
+    // -- Analysis logic --
+    fun updateAnalysis() {
+        val previousAnalysis = _playerAnalysis.value
+        scope.launch(Dispatchers.Default) {
+            try {
+                val gameStats = getGameStats().first() // collect the latest values of GameStats
+                val analysis = analyzePlayerStats(gameStats)
+
+                _playerAnalysis.value = PlayerAnalysis(
+                    predictedWinRate = analysis.predictedWinRate,
+                    consistency = analysis.consistency,
+                    improvement = analysis.improvement,
+                    playStyle = analysis.playStyle,
+                    trends = analysis.trends
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to update analysis")
+                // Keep the previous analysis on error
+                _playerAnalysis.value = previousAnalysis
+            }
+        }
+    }
+
+    private fun determinePlayStyle(riskLevel: Float): PlayStyle {
+        return when {
+            riskLevel > 0.7f -> PlayStyle.AGGRESSIVE
+            riskLevel < 0.3f -> PlayStyle.CAUTIOUS
+            else -> PlayStyle.BALANCED
+        }
+    }
+
 }

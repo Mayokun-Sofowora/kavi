@@ -60,9 +60,9 @@ fun BoardsScreen(
         ) {
             // Board Selection Cards
             val boards = listOf(
-                Triple(GameBoard.PIG.modeName, "Single player dice game", R.drawable.pig),
+                Triple(GameBoard.PIG.modeName, "Single die dice game", R.drawable.pig),
                 Triple(GameBoard.GREED.modeName, "Race to 10,000 points", R.drawable.greed),
-                Triple(GameBoard.MEXICO.modeName, "Lowest score wins", R.drawable.mexico),
+                Triple(GameBoard.MEXICO.modeName, "Highest score wins", R.drawable.mexico),
                 Triple(GameBoard.CHICAGO.modeName, "11 rounds of strategy", R.drawable.chicago),
                 Triple(GameBoard.BALUT.modeName, "Yahtzee-style scoring", R.drawable.balut)
             )

@@ -15,6 +15,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Singleton
 
 @Module
@@ -53,6 +55,13 @@ object AppModule {
         return GameRepositoryImpl(firebaseFirestore, firebaseAuth, applicationContext)
     }
 
+    // TODO() Confirm authenticity of the coroutine scope in shake detection
+    @Provides
+    @Singleton
+    fun provideCoroutineScope(): CoroutineScope {
+        return CoroutineScope(Dispatchers.Main)
+    }
+
     @Singleton
     @Provides
     fun provideNetworkConnDependencies(@ApplicationContext context: Context): ConnectivityManager {
@@ -73,8 +82,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideStatisticsManager(@ApplicationContext context: Context): StatisticsManager {
-        return StatisticsManager(context)
+    fun provideStatisticsManager(
+        @ApplicationContext context: Context,
+        gameRepository: GameRepository
+    ): StatisticsManager {
+        return StatisticsManager(context, gameRepository)
     }
 
 }

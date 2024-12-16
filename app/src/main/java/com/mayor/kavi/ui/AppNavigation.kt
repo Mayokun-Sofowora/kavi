@@ -1,7 +1,7 @@
 package com.mayor.kavi.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.*
@@ -34,8 +34,10 @@ fun AppNavigation() {
             InterfaceModeScreen(viewModel = appViewModel, navController = navController)
         }
         // AR Screen
-        composable(Routes.ArScreen.route) {}
-
+        composable(Routes.ArScreen.route) {
+//            VirtualScreen(viewModel = diceViewModel,
+//            onNavigateBack = { navController.popBackStack() })
+        }
         // Board Games
         composable(Routes.Boards.route) {
             BoardsScreen(viewModel = diceViewModel, navController = navController)
@@ -70,7 +72,11 @@ fun AppNavigation() {
         }
         // Statistics
         composable(Routes.Statistics.route) {
-            StatisticsScreen(viewModel = diceViewModel, navController = navController)
+            StatisticsScreen(
+                appViewModel = appViewModel,
+                diceViewModel = diceViewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
         // Instructions
         composable(Routes.Instructions.route) {
@@ -86,26 +92,6 @@ fun AppNavigation() {
         composable(Routes.SignOut.route) {
             SignInScreen(navController = navController)
         }
-        // Player Selection
-        composable(Routes.PlayerSelection.route) {
-            PlayerSelectionScreen(
-                multiplayerViewModel = hiltViewModel(),
-                onPlayerSelected = { playerId ->
-                    navController.navigate(Routes.WaitingRoom.route)
-                },
-                onBack = { navController.popBackStack() }
-            )
-        }
-        // Waiting Room
-        composable(Routes.WaitingRoom.route) {
-            WaitingRoomScreen(
-                multiplayerViewModel = hiltViewModel(),
-                onGameStart = {
-                    navController.navigate(Routes.Boards.route)
-                },
-                onCancel = { navController.popBackStack() }
-            )
-        }
     }
 }
 
@@ -117,8 +103,6 @@ sealed class Routes(val route: String) {
     object ArScreen : Routes("arScreen")
     object Boards : Routes("classicBoards")
     object PlayMode : Routes("playMode")
-    object PlayerSelection : Routes("playerSelection")
-    object WaitingRoom : Routes("waitingRoom")
     object Settings : Routes("settings")
     object Instructions : Routes("instructions/full")
     object InstructionsShort : Routes("instructions/short")

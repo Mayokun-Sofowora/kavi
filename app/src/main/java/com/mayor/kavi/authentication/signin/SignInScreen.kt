@@ -27,11 +27,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import com.google.android.gms.common.api.ApiException
 import com.mayor.kavi.ui.Routes
+import com.mayor.kavi.ui.viewmodel.AppViewModel
 
 @Composable
 fun SignInScreen(
     navController: NavController,
-    viewModel: SignInViewModel = hiltViewModel()
+    viewModel: SignInViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel()
 ) {
     val signInState by viewModel.signInState.collectAsState()
     var email by remember { mutableStateOf("") }
@@ -39,7 +41,6 @@ fun SignInScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     val signInScope = rememberCoroutineScope() // Coroutine scope for handling side effects
     val context = LocalContext.current
-    var isConnected by remember { mutableStateOf(true) }
 
     BackHandler(enabled = true) {
         // Do nothing to prevent navigation to sign-in page
@@ -73,7 +74,7 @@ fun SignInScreen(
                 val account = task.getResult(ApiException::class.java)
                 account?.idToken?.let { token ->
                     val credential = GoogleAuthProvider.getCredential(token, null)
-                    viewModel.googleSignIn(credential, navController)
+                    viewModel.googleSignIn(credential, appViewModel)
                 }
             } catch (e: ApiException) {
                 Toast.makeText(
@@ -81,13 +82,12 @@ fun SignInScreen(
                     "Google sign in failed: ${e.message}",
                     Toast.LENGTH_SHORT
                 ).show()
-                viewModel.onLoginCancel()
+                appViewModel.onLoginCancel()
             }
         } else {
-            viewModel.onLoginCancel()
+            appViewModel.onLoginCancel()
         }
     }
-
 
     // Main UI
     Column(
@@ -98,8 +98,11 @@ fun SignInScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = "WELCOME", style = MaterialTheme.typography.titleLarge)
+
         Spacer(modifier = Modifier.height(16.dp))
+
         Text(text = "Sign In To Continue", style = MaterialTheme.typography.bodyMedium)
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Email Field
@@ -109,6 +112,7 @@ fun SignInScreen(
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth()
         )
+
         Spacer(modifier = Modifier.height(8.dp))
 
         // Password Field with visibility toggle
@@ -133,13 +137,15 @@ fun SignInScreen(
                 }
             }
         )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Sign In Button
         Button(
             onClick = {
                 signInScope.launch {
-                    viewModel.signIn(email, password, navController)
+                    appViewModel.updateLogin()
+                    viewModel.signIn(email, password, navController, appViewModel)
                 }
             }, colors = ButtonDefaults.buttonColors(
                 containerColor = colorResource(id = R.color.primary),
@@ -158,7 +164,7 @@ fun SignInScreen(
         // Google Sign In Button
         Button(
             onClick = {
-                viewModel.onLoginStart()
+                appViewModel.updateLogin()
                 launcher.launch(googleSignInClient.signInIntent)
             },
             colors = ButtonDefaults.buttonColors(
@@ -186,6 +192,7 @@ fun SignInScreen(
             CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
         }
 
+
         // Sign Up Link
         TextButton(
             onClick = { navController.navigate(Routes.SignUp.route) },
@@ -201,8 +208,9 @@ fun SignInScreen(
     // Handle Google Sign-In result
     signInState.isAuthSuccess?.let {
         signInScope.launch {
-            viewModel.updateSignInStateWithError("Google sign-in successful")
             navController.navigate(Routes.MainMenu.route)
+            viewModel.updateSignInStateWithError("Google sign-in successful")
+            appViewModel.onLoginComplete()
         }
     }
 }

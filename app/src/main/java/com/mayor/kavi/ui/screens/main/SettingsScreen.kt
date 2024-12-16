@@ -11,7 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.*
 import androidx.navigation.NavController
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.R
+import com.mayor.kavi.data.games.BoardColors
 import com.mayor.kavi.data.manager.*
 import kotlinx.coroutines.*
 
@@ -34,13 +35,9 @@ fun SettingsScreen(
     }
 
     val scope = rememberCoroutineScope()
-
     val settingsManager = LocalSettingsManager.current
-
     val vibrationEnabled by settingsManager.getVibrationEnabled().collectAsState(initial = true)
-
     val shakeEnabled by settingsManager.getShakeEnabled().collectAsState(initial = false)
-
     val soundEnabled by settingsManager.getSoundEnabled().collectAsState(initial = true)
 
     LaunchedEffect(vibrationEnabled) {
@@ -58,7 +55,7 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
@@ -93,7 +90,6 @@ fun SettingsScreen(
                         onCheckedChange = {
                             scope.launch {
                                 settingsManager.setShakeEnabled(it)
-//                                viewModel.setShakeDetection(it)
                             }
                         }
                     )
@@ -107,7 +103,6 @@ fun SettingsScreen(
                         checked = vibrationEnabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
-//                            viewModel.setVibrationEnabled(enabled)
                                 settingsManager.setVibrationEnabled(enabled)
                             }
                         }
@@ -146,11 +141,12 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
+                            val availableColors = BoardColors.getAvailableColors()
                             items(
-                                count = SettingsManager.BOARD_COLORS.size,
-                                key = { index -> SettingsManager.BOARD_COLORS[index] }
+                                count = availableColors.size,
+                                key = { index -> availableColors[index] }
                             ) { index ->
-                                val color = SettingsManager.BOARD_COLORS[index]
+                                val color = availableColors[index]
                                 ColorOption(
                                     color = color,
                                     isSelected = color == boardColor,
@@ -232,21 +228,17 @@ private fun ColorOption(
     isSelected: Boolean,
     onSelect: () -> Unit
 ) {
-    val backgroundColor = when (color) {
-        "default" -> Color(0xFFD3D3D3)  // Dark gray
-        "blue" -> Color(0xFF90CAF9)     // Material Blue 200
-        "green" -> Color(0xFFA5D6A7)    // Material Green 200
-        "red" -> Color(0xFFEF9A9A)      // Material Red 200
-        "orange" -> Color(0xFFFFCC80)   // Material Orange 200
-        "night" -> Color(0xFF212121)    // Dark gray
-        else -> Color(0xFFFFFFFF)
-    }
-
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .background(backgroundColor)
+            .then(
+                when (val backgroundColor = BoardColors.getColor(color)) {
+                    is Color -> Modifier.background(color = backgroundColor)
+                    is Brush -> Modifier.background(brush = backgroundColor)
+                    else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                }
+            )
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
                 color = if (isSelected) MaterialTheme.colorScheme.primary

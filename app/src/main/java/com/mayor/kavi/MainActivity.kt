@@ -1,18 +1,13 @@
 package com.mayor.kavi
 
-import android.os.Build
-import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.os.*
+import androidx.activity.*
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.google.firebase.firestore.*
-import com.mayor.kavi.data.manager.LocalSettingsManager
-import com.mayor.kavi.data.manager.LocalStatisticsManager
-import com.mayor.kavi.data.manager.SettingsManager
-import com.mayor.kavi.data.manager.StatisticsManager
+import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.ui.AppNavigation
 import com.mayor.kavi.ui.theme.KaviTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,6 +18,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var statisticsManager: StatisticsManager
+
     @Inject
     lateinit var settingsManager: SettingsManager
 

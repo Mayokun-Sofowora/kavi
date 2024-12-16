@@ -11,7 +11,9 @@ import kotlin.math.sqrt
 
 class ShakeDetectionService @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsManager: SettingsManager
+    private val settingsManager: SettingsManager,
+    private val statisticsManager: StatisticsManager,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)

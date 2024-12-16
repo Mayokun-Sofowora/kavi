@@ -14,6 +14,7 @@ import com.mayor.kavi.util.Result
 import com.mayor.kavi.data.UserProfile
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.mayor.kavi.data.Avatar
 import timber.log.Timber
 
 interface AuthRepository {
@@ -39,10 +40,10 @@ class AuthRepositoryImpl @Inject constructor(
                 try {
                     saveUserProfileToFirestore(
                         UserProfile(
-                            uid = user.uid,
+                            id = user.uid,
                             name = user.displayName ?: email.substringBefore('@'),
                             email = user.email ?: "",
-                            image = user.photoUrl?.toString(),
+                            avatar = Avatar.DEFAULT,
                             favoriteGames = listOf(),
                             recentScores = listOf()
                         ),
@@ -72,10 +73,10 @@ class AuthRepositoryImpl @Inject constructor(
                 firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             saveUserProfileToFirestore(
                 UserProfile(
-                    uid = gameRepository.getCurrentUserId()!!,
+                    id = gameRepository.getCurrentUserId()!!,
                     name = username,
                     email = email,
-                    image = "",
+                    avatar = Avatar.DEFAULT,
                     favoriteGames = listOf(),
                     recentScores = listOf()
                 )
@@ -100,9 +101,9 @@ class AuthRepositoryImpl @Inject constructor(
             if (user != null) {
                 saveUserProfileToFirestore(
                     UserProfile(
-                        uid = user.uid,
+                        id = user.uid,
                         email = user.email ?: "",
-                        image = "",
+                        avatar = Avatar.DEFAULT,
                         favoriteGames = listOf(),
                         recentScores = listOf()
                     ),

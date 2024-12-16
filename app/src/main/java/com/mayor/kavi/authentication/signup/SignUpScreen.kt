@@ -15,12 +15,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.R
+import com.mayor.kavi.ui.viewmodel.AppViewModel
 import kotlinx.coroutines.launch
 
 @Composable
 fun SignUpScreen(
     navController: NavController,
-    viewModel: SignUpViewModel = hiltViewModel()
+    viewModel: SignUpViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel()
 ) {
     val signUpState by viewModel.signUpState.collectAsState()
     val context = LocalContext.current
@@ -83,7 +85,8 @@ fun SignUpScreen(
         Button(
             onClick = {
                 signUpScope.launch {
-                    viewModel.signUp(username, email, password, navController)
+                    appViewModel.updateLogin()
+                    viewModel.signUp(username, email, password, navController, appViewModel)
                 }
             },
             colors = ButtonDefaults.buttonColors(
@@ -103,15 +106,23 @@ fun SignUpScreen(
             CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
 
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Already have an account? Sign In Link
-        TextButton(onClick = { navController.navigate(Routes.SignIn.route) },
+        TextButton(
+            onClick = { navController.navigate(Routes.SignIn.route) },
             colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = colorResource(id = R.color.primary)
-        )) {
+                containerColor = Color.Transparent,
+                contentColor = colorResource(id = R.color.primary)
+            )
+        ) {
             Text(text = "Already have an account? Sign In")
         }
+    }
+
+    val loginComplete by appViewModel.loginComplete.collectAsState()
+    if (!loginComplete && signUpState.toastMessage == "Sign-up successful") {
+        navController.navigate(Routes.MainMenu.route)
     }
 }

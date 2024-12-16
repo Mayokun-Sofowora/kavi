@@ -17,6 +17,7 @@ android {
     defaultConfig {
         applicationId = "com.mayor.kavi"
         minSdk = 30
+        //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -37,11 +38,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -64,18 +65,17 @@ dependencies {
 
     implementation("androidx.navigation:navigation-runtime-ktx:2.8.4")
     implementation("androidx.navigation:navigation-fragment-ktx:2.8.4")
-    implementation("androidx.navigation:navigation-ui-ktx:2.8.4")
-    // Room local db
-//    implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
-//    implementation("androidx.room:room-runtime:2.6.1")
-//    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.navigation:navigation-ui-ktx:2.8.4")
+    // Room local db
+    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-runtime:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // Kotlin Coroutine
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     // Firebase cloud db
-    // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     // Libraries for Authentication, Analyzing and Cloud Firestore
     implementation("com.google.firebase:firebase-storage")
@@ -107,15 +107,16 @@ dependencies {
     // ML Kit
     implementation("com.google.mlkit:object-detection:17.0.2")
     implementation("com.google.mlkit:image-labeling:17.0.2")
-    // ARCore
-    implementation("com.google.ar:core:1.46.0")
+    // ARCore ands scenes
+    implementation("com.google.ar:core:1.47.0")
+    implementation("io.github.sceneview:arsceneview:0.10.0")
+    implementation("com.google.android.material:material:1.12.0")
     // Camera X
     implementation("androidx.camera:camera-camera2:1.4.0")
     implementation("androidx.camera:camera-lifecycle:1.4.0")
     implementation("androidx.camera:camera-view:1.4.0")
     implementation("androidx.camera:camera-core:1.4.0")
     // JSON De/Serialization
-//    implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // Documentation library
     implementation("org.jetbrains.dokka:android-documentation-plugin:1.9.20")
@@ -140,7 +141,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
     implementation("androidx.compose.runtime:runtime-livedata:1.4.3")
-
 
     // Hilt Test
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")

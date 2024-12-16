@@ -2,12 +2,13 @@ package com.mayor.kavi.data
 
 import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.*
 import com.mayor.kavi.data.manager.DataStoreManager
+import com.mayor.kavi.data.manager.GameStats
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -32,6 +33,15 @@ interface GameRepository {
     suspend fun joinGameSession(sessionId: String): Result<GameSession>
     suspend fun updateGameState(sessionId: String, state: Map<String, Any>): Result<Unit>
     suspend fun listenToGameUpdates(sessionId: String): Flow<GameSession>
+
+    // User Statistics
+    suspend fun updateGameStatistics(
+        gameMode: String,
+        score: Int,
+        isWin: Boolean
+    ): Result<Unit>
+
+    suspend fun getGameStatistics(): Result<GameStats>
 }
 
 class GameRepositoryImpl @Inject constructor(
@@ -58,14 +68,15 @@ class GameRepositoryImpl @Inject constructor(
         Result.failure(e)
     }
 
-    override suspend fun updateUserProfile(userProfile: UserProfile): Result<Unit> = try {
-        firebaseFirestore
+    override suspend fun updateUserProfile(profile: UserProfile): Result<Unit> = try {
+        val userProfile = firebaseFirestore
             .collection("users")
-            .document(userProfile.uid)
-            .set(userProfile)
+            .document(profile.id)
+        userProfile.set(profile, SetOptions.merge())
             .await()
         Result.success(Unit)
     } catch (e: Exception) {
+        Timber.e(e, "Error updating user profile")
         Result.failure(e)
     }
 
@@ -263,6 +274,86 @@ class GameRepositoryImpl @Inject constructor(
             Result.failure(Exception("Data not found"))
         }
     } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    override suspend fun updateGameStatistics(
+        gameMode: String,
+        score: Int,
+        isWin: Boolean
+    ): Result<Unit> = try {
+        val currentUserId = getCurrentUserId() ?: throw Exception("User not authenticated")
+
+        val userDoc = firebaseFirestore.collection("users").document(currentUserId)
+
+        firebaseFirestore.runTransaction { transaction ->
+            val snapshot = transaction.get(userDoc)
+            val currentStats = snapshot.get("gameStats") as? Map<String, Any> ?: mapOf()
+
+            // Update game stats
+            val updatedStats = currentStats.toMutableMap().apply {
+                // Always increment games played
+                val gamesPlayed = (get("gamesPlayed") as? Long ?: 0L) + 1
+                put("gamesPlayed", gamesPlayed)
+
+                // Update win rates with proper type handling
+                @Suppress("UNCHECKED_CAST")
+                val winRates =
+                    ((get("winRates") as? Map<String, Map<String, Int>>) ?: mapOf()).toMutableMap()
+                val current = winRates[gameMode]?.let { map ->
+                    (map["wins"] ?: 0) to (map["total"] ?: 0)
+                } ?: (0 to 0)
+
+                winRates[gameMode] = mapOf(
+                    "wins" to (current.first + if (isWin) 1 else 0),
+                    "total" to (current.second + 1)
+                )
+                put("winRates", winRates)
+
+                // Update high scores
+                @Suppress("UNCHECKED_CAST")
+                val highScores = (get("highScores") as? Map<String, Int> ?: mapOf()).toMutableMap()
+                val currentHigh = highScores[gameMode] ?: 0
+                if (score > currentHigh) {
+                    highScores[gameMode] = score
+                }
+                put("highScores", highScores)
+
+            }
+
+            transaction.set(userDoc, mapOf("gameStats" to updatedStats), SetOptions.merge())
+        }.await()
+
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error updating game statistics")
+        Result.failure(e)
+    }
+
+    override suspend fun getGameStatistics(): Result<GameStats> = try {
+        val currentUserId = getCurrentUserId() ?: throw Exception("User not authenticated")
+
+        val snapshot = firebaseFirestore
+            .collection("users")
+            .document(currentUserId)
+            .get()
+            .await()
+
+        val stats = snapshot.get("gameStats") as? Map<String, Any>
+        if (stats != null) {
+            Result.success(
+                GameStats(
+                    gamesPlayed = (stats["gamesPlayed"] as? Long ?: 0L).toInt(),
+                    highScores = stats["highScores"] as? Map<String, Int> ?: mapOf(),
+                    winRates = stats["winRates"] as? Map<String, Pair<Int, Int>> ?: mapOf(),
+                    shakeRates = stats["shakeRates"] as? List<Pair<Long, Int>> ?: listOf()
+                )
+            )
+        } else {
+            Result.success(GameStats(0, mapOf(), mapOf(), listOf()))
+        }
+    } catch (e: Exception) {
+        Timber.e(e, "Error fetching game statistics")
         Result.failure(e)
     }
 }

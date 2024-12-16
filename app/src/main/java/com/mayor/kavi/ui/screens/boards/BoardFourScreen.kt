@@ -7,9 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.*
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -18,10 +17,8 @@ import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.components.DiceRollAnimation
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
-import kotlinx.coroutines.*
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.BoardColors
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.games.*
 import com.mayor.kavi.data.manager.LocalSettingsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,7 +86,13 @@ fun BoardFourScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(color = BoardColors.getColor(boardColor))
+                    .then(
+                        when (val color = BoardColors.getColor(boardColor)) {
+                            is Color -> Modifier.background(color = color)
+                            is Brush -> Modifier.background(brush = color)
+                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                        }
+                    )
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -132,7 +135,7 @@ fun BoardFourScreen(
                         )
                         Text(
                             text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         HorizontalDivider(
@@ -150,16 +153,6 @@ fun BoardFourScreen(
                                 )
                                 Text(
                                     text = "${chicagoState.totalScore}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Round Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${chicagoState.roundScore}",
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
@@ -197,13 +190,13 @@ fun BoardFourScreen(
         if (showWinDialog) {
             AlertDialog(
                 onDismissRequest = { navController.popBackStack() },
-                title = { Text("Game Complete!") },
-                text = { Text("Congratulations! You've completed all rounds of Chicago!") },
+                title = { Text("Congratulations!") },
+                text = { Text("You've completed all rounds of Chicago!") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            viewModel.resetGame()
                             showWinDialog = false
+                            viewModel.resetGame()
                         }, colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary)
@@ -215,11 +208,11 @@ fun BoardFourScreen(
                 dismissButton = {
                     Button(
                         onClick = {
-                            viewModel.resetGame()
                             navController.navigate(Routes.Boards.route) {
                                 popUpTo(Routes.Boards.route) { inclusive = true }
                             }
                             showWinDialog = false
+                            viewModel.resetGame()
                         }, colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
                             contentColor = colorResource(id = R.color.on_primary)

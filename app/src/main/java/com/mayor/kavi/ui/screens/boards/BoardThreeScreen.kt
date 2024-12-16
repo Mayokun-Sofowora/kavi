@@ -7,23 +7,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.BoardColors
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.games.*
 import com.mayor.kavi.data.manager.LocalSettingsManager
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.components.DiceRollAnimation
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.DiceResultImage
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +86,13 @@ fun BoardThreeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(color = BoardColors.getColor(boardColor))
+                    .then(
+                        when (val color = BoardColors.getColor(boardColor)) {
+                            is Color -> Modifier.background(color = color)
+                            is Brush -> Modifier.background(brush = color)
+                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                        }
+                    )
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -127,13 +130,13 @@ fun BoardThreeScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
-                            text = if (mexicoState.isFirstRound) "First Round" else "Round ${mexicoState.currentRound}",
+                            text = if (mexicoState.currentRoundNumber == 1) "First Round" else "Round ${mexicoState.currentRoundNumber}",
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                         Text(
                             text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         HorizontalDivider(
@@ -162,11 +165,26 @@ fun BoardThreeScreen(
                                     style = MaterialTheme.typography.labelMedium
                                 )
                                 Text(
-                                    text = "${scoreState.currentTurnScore}",
+                                    text = "${scoreState.currentTurnScore}", // this was scoreState.currentScore
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Total Score",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Text(
+                                    text = "${mexicoState.roundScores.sum()}",
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
                         }
+                        Text(
+                            text = mexicoState.gameStatus,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                 }
 
@@ -202,31 +220,35 @@ fun BoardThreeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 AlertDialog(
-                    onDismissRequest = { showWinDialog = false },
-                    title = { Text("¡México!") },
-                    text = { Text("You rolled a ${scoreState.resultMessage}!") },
+                    onDismissRequest = { navController.popBackStack() },
+                    title = { Text("Congratulations!") },
+                    text = { Text("You won with ${mexicoState.roundScores.sum()} points!") },
                     confirmButton = {
-                        Button(onClick = {
-                            viewModel.resetGame()
-                            showWinDialog = false
-                        }, colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        )) {
+                        Button(
+                            onClick = {
+                                showWinDialog = false
+                                viewModel.resetGame()
+                            }, colors = ButtonDefaults.buttonColors(
+                                containerColor = colorResource(id = R.color.primary),
+                                contentColor = colorResource(id = R.color.on_primary)
+                            )
+                        ) {
                             Text("Play Again")
                         }
                     },
                     dismissButton = {
-                        Button(onClick = {
-                            viewModel.resetGame()
-                            navController.navigate(Routes.Boards.route) {
-                                popUpTo(Routes.Boards.route) { inclusive = true }
-                            }
-                            showWinDialog = false
-                        },colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        ),
+                        Button(
+                            onClick = {
+                                navController.navigate(Routes.Boards.route) {
+                                    popUpTo(Routes.Boards.route) { inclusive = true }
+                                }
+                                showWinDialog = false
+                                viewModel.resetGame()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colorResource(id = R.color.primary),
+                                contentColor = colorResource(id = R.color.on_primary)
+                            ),
                         ) {
                             Text("Exit")
                         }
@@ -238,31 +260,35 @@ fun BoardThreeScreen(
 
         // Exit dialog
         if (showExitGameDialog) {
-            AlertDialog(
-                containerColor = colorResource(id = R.color.surface),
+            AlertDialog(containerColor = colorResource(id = R.color.surface),
                 titleContentColor = colorResource(id = R.color.on_surface),
                 textContentColor = colorResource(id = R.color.on_surface),
                 onDismissRequest = { showExitGameDialog = false },
                 title = { Text("Exit Game?") },
                 text = { Text("Are you sure you want to exit? Your progress will be lost.") },
                 confirmButton = {
-                    Button(onClick = {
-                        viewModel.resetGame()
-                        navController.navigate(Routes.Boards.route) {
-                            popUpTo(Routes.Boards.route) { inclusive = true }
-                        }
-                    },colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    )) {
+                    Button(
+                        onClick = {
+                            navController.navigate(Routes.Boards.route) {
+                                popUpTo(Routes.Boards.route) { inclusive = true }
+                            }
+                            viewModel.resetGame()
+                        }, colors = ButtonDefaults.buttonColors(
+                            containerColor = colorResource(id = R.color.primary),
+                            contentColor = colorResource(id = R.color.on_primary)
+                        )
+                    ) {
                         Text("Exit")
                     }
                 },
                 dismissButton = {
-                    Button(onClick = { showExitGameDialog = false }, colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    )) {
+                    Button(
+                        onClick = { showExitGameDialog = false },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colorResource(id = R.color.primary),
+                            contentColor = colorResource(id = R.color.on_primary)
+                        )
+                    ) {
                         Text("Cancel")
                     }
                 }

@@ -1,25 +1,28 @@
 import tensorflow as tf
 import numpy as np
+import os
 
-# Create synthetic training data
+# Define the path for the TFLite model
+output_path = os.path.join(os.path.dirname(__file__), "../app/src/main/assets/")
+os.makedirs(output_path, exist_ok=True)
+
 def generate_training_data(n_samples=1000):
-    # Features: [games_played, win_rate, avg_score, consistency]
+    # Generate features
     X = np.random.rand(n_samples, 4)
     X[:, 0] *= 100  # games_played (0-100)
     X[:, 1] *= 1.0  # win_rate (0-1)
     X[:, 2] *= 1000  # avg_score (0-1000)
     X[:, 3] *= 1.0  # consistency (0-1)
-    
-    # Labels: [predicted_win_rate, consistency, improvement, play_style]
+
+    # Generate labels
     y = np.zeros((n_samples, 4))
     y[:, 0] = 0.6 * X[:, 1] + 0.4 * X[:, 3]  # predicted win rate
     y[:, 1] = X[:, 3]  # consistency
     y[:, 2] = 1.0 - (X[:, 0] / 100)  # improvement potential
     y[:, 3] = 0.4 * X[:, 1] + 0.6 * X[:, 2] / 1000  # play style
-    
+
     return X, y
 
-# Create and train model
 def create_model():
     model = tf.keras.Sequential([
         tf.keras.layers.Dense(8, activation='relu', input_shape=(4,)),
@@ -27,7 +30,7 @@ def create_model():
         tf.keras.layers.Dense(8, activation='relu'),
         tf.keras.layers.Dense(4, activation='sigmoid')
     ])
-    
+
     model.compile(
         optimizer='adam',
         loss='mse',
@@ -35,15 +38,35 @@ def create_model():
     )
     return model
 
-# Train and export model
-X_train, y_train = generate_training_data()
+# Generate data
+X, y = generate_training_data()
+
+# Split data manually
+train_size = int(0.8 * len(X))
+X_train, X_val = X[:train_size], X[train_size:]
+y_train, y_val = y[:train_size], y[train_size:]
+
+# Create and train model
 model = create_model()
-model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=1)
+model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=50,
+    batch_size=32,
+    verbose=1
+)
 
 # Convert to TFLite
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
 tflite_model = converter.convert()
 
-# Save the model
-with open('../app/src/main/assets/dice_stats_model.tflite', 'wb') as f:
-    f.write(tflite_model) 
+# Add metadata
+with tf.io.gfile.GFile(os.path.join(output_path, 'dice_stats_model.tflite'), 'wb') as f:
+    f.write(tflite_model)
+
+print(f"Model saved to {output_path}")
+
+# Optional: Test the model
+test_input = np.array([[50, 0.7, 500, 0.8]])  # Example input
+predictions = model.predict(test_input)
+print("\nTest prediction:", predictions)

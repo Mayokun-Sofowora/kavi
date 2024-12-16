@@ -20,10 +20,11 @@ sealed class Result<out T> {
      * @param message The error message describing the failure.
      * @param exception The optional exception that caused the failure.
      */
-    data class Error(
+    data class Error<T>(
         val message: String = "An unknown error occurred",
-        val exception: Throwable? = null
-    ) : Result<Nothing>()
+        val exception: Throwable? = null,
+        val data: T? = null
+    ) : Result<T>()
 
     data class Loading<out T>(val data: T? = null) : Result<T>()
 
@@ -37,4 +38,16 @@ sealed class Result<out T> {
 fun <T> Result<T>.successOr(fallback: T): T {
     return (this as? Result.Success<T>)?.data ?: fallback
 }
+
+/**
+ * Helper function to get the data from a successful result or throw an exception.
+ *
+ * @throws Exception If the result is not successful.
+ */
+val <T> Result<T>.dataOrNull: T?
+    get() = when (this) {
+        is Result.Success -> this.data
+        is Result.Error -> this.data
+        is Result.Loading -> this.data
+    }
 

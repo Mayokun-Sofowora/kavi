@@ -1,7 +1,7 @@
 package com.mayor.kavi.ui.viewmodel
 
-import android.app.Application
 import androidx.lifecycle.*
+import com.google.firebase.auth.FirebaseAuth
 import com.mayor.kavi.data.*
 import com.mayor.kavi.data.manager.DataStoreManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,27 +10,35 @@ import kotlinx.coroutines.*
 import timber.log.Timber
 import javax.inject.Inject
 import com.mayor.kavi.util.Result
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
+import com.mayor.kavi.util.dataOrNull
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    application: Application,
+    @ApplicationContext private val context: Context,
+    private val auth: FirebaseAuth,
     private val gameRepository: GameRepository
-) : AndroidViewModel(application) {
-    private val diceDataStore = DataStoreManager.Companion.getInstance(application)
-    
+) : ViewModel() {
+    private val diceDataStore = DataStoreManager.getInstance(context)
+
     // App-wide settings and modes
-    private val _interfaceMode = diceDataStore.getInterfaceMode().asLiveData()
-    val interfaceMode: LiveData<String> = _interfaceMode
+    val interfaceMode: StateFlow<String> = diceDataStore.getInterfaceMode()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
 
     // User state
-    private val _userProfileState = MutableStateFlow<Result<UserProfile>>(Result.Loading(null))
-    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState
+    private val _userProfileState: MutableStateFlow<Result<UserProfile>> =
+        MutableStateFlow(Result.Loading(null))
+    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState.asStateFlow()
 
-    private val _loginComplete = MutableLiveData(false)
-    val loginComplete: LiveData<Boolean> = _loginComplete
+    private val _loginComplete = MutableStateFlow(false)
+    val loginComplete: StateFlow<Boolean> = _loginComplete.asStateFlow()
 
     init {
-        Timber.i("AppViewModel created")
         loadUserProfile()
     }
 
@@ -39,17 +47,14 @@ class AppViewModel @Inject constructor(
         diceDataStore.setInterfaceMode(mode)
     }
 
-    // User profile methods
     fun loadUserProfile() = viewModelScope.launch {
-        _userProfileState.value = Result.Loading(null)
-        
+        _userProfileState.value = Result.Loading(_userProfileState.value.dataOrNull)
         try {
             val currentUserId = gameRepository.getCurrentUserId()
             if (currentUserId == null) {
                 _userProfileState.value = Result.Error("User not logged in", null)
                 return@launch
             }
-
             gameRepository.getUserById(currentUserId).fold(
                 onSuccess = { profile ->
                     _userProfileState.value = Result.Success(profile)
@@ -68,14 +73,11 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun updateUserProfile(userProfile: UserProfile) = viewModelScope.launch {
-        _userProfileState.value = Result.Loading(null)
-        
-        gameRepository.updateUserProfile(userProfile).fold(
-            onSuccess = {
-                _userProfileState.value = Result.Success(userProfile)
-            },
-            onFailure = { exception ->
+    fun updateUserProfile(profile: UserProfile) = viewModelScope.launch {
+        _userProfileState.value = Result.Loading(profile)
+        gameRepository.updateUserProfile(profile).fold(
+            onSuccess = {loadUserProfile()},
+            onFailure = {exception ->
                 _userProfileState.value = Result.Error(
                     exception.message ?: "Failed to update user profile",
                     exception
@@ -112,4 +114,5 @@ class AppViewModel @Inject constructor(
             }
         )
     }
-} 
+
+}

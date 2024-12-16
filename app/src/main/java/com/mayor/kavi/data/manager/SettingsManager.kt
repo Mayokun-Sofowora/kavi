@@ -4,10 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.games.*
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.IOException
 import javax.inject.Inject
 
@@ -21,19 +19,8 @@ class SettingsManager @Inject constructor(context: Context) {
         private val VIBRATION_ENABLED_KEY = booleanPreferencesKey("VIBRATION_ENABLED_KEY")
         private val BOARD_COLOR_KEY = stringPreferencesKey("BOARD_COLOR_KEY")
 
-        private val STATS_PREFIX = stringPreferencesKey("STATS_")
-        private val GAMES_PLAYED_KEY = intPreferencesKey("GAMES_PLAYED")
-        private val HIGH_SCORES_KEY = stringPreferencesKey("HIGH_SCORES")
-        private val WIN_RATES_KEY = stringPreferencesKey("WIN_RATES")
-
         // Define available board colors
-        val BOARD_COLORS = listOf(
-            "default",
-            "blue",
-            "green", 
-            "purple",
-            "orange"
-        )
+        val BOARD_COLORS = BoardColors.getAvailableColors()
     }
 
     suspend fun setShakeEnabled(enabled: Boolean) {
@@ -85,53 +72,4 @@ class SettingsManager @Inject constructor(context: Context) {
         }
     }
 
-    suspend fun updateGameStats(
-        board: GameBoard,
-        score: Int,
-        isWin: Boolean
-    ) {
-        dataStore.edit { prefs ->
-            // Update games played
-            val gamesPlayed = prefs[GAMES_PLAYED_KEY] ?: 0
-            prefs[GAMES_PLAYED_KEY] = gamesPlayed + 1
-
-            // Update high scores
-            val highScores = prefs[HIGH_SCORES_KEY]?.let {
-                Json.decodeFromString<Map<String, Int>>(it)
-            } ?: emptyMap()
-
-            val updatedHighScores = highScores.toMutableMap().apply {
-                val currentHigh = this[board.modeName] ?: 0
-                if (score > currentHigh) {
-                    this[board.modeName] = score
-                }
-            }
-
-            prefs[HIGH_SCORES_KEY] = Json.encodeToString(updatedHighScores)
-
-            // Update win rates
-            val winRates = prefs[WIN_RATES_KEY]?.let {
-                Json.decodeFromString<Map<String, Pair<Int, Int>>>(it)
-            } ?: emptyMap()
-
-            val updatedWinRates = winRates.toMutableMap().apply {
-                val current = this[board.modeName] ?: (0 to 0)
-                this[board.modeName] = (current.first + if (isWin) 1 else 0) to (current.second + 1)
-            }
-
-            prefs[WIN_RATES_KEY] = Json.encodeToString(updatedWinRates)
-        }
-    }
-
-    fun getGameStats(): Flow<GameStats> = dataStore.data.map { prefs ->
-        GameStats(
-            gamesPlayed = prefs[GAMES_PLAYED_KEY] ?: 0,
-            highScores = prefs[HIGH_SCORES_KEY]?.let {
-                Json.decodeFromString<Map<String, Int>>(it)
-            } ?: emptyMap(),
-            winRates = prefs[WIN_RATES_KEY]?.let {
-                Json.decodeFromString<Map<String, Pair<Int, Int>>>(it)
-            } ?: emptyMap()
-        )
-    }
 }
