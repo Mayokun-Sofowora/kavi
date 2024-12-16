@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+venv/
+*.pyd
+*.dll
+*.log
+*.tmp
