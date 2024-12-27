@@ -1,5 +1,6 @@
 package com.mayor.kavi.ui.screens.modes
 
+import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -67,7 +68,7 @@ private fun TopBar(navController: NavController) {
         },
         actions = {
             IconButton(
-                onClick = { navController.navigate(Routes.InstructionsShort.route) }
+                onClick = { navController.navigate(Routes.InstructionsShort.route + "/1") }
             ) {
                 Icon(
                     Icons.Default.Info,

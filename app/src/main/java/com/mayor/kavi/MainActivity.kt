@@ -1,12 +1,14 @@
 package com.mayor.kavi
 
-import android.os.*
-import androidx.activity.*
+import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.google.firebase.firestore.*
+import com.google.android.gms.common.*
 import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.ui.AppNavigation
 import com.mayor.kavi.ui.theme.KaviTheme
@@ -18,35 +20,47 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var statisticsManager: StatisticsManager
-
     @Inject
     lateinit var settingsManager: SettingsManager
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Timber.tag("MainActivity").d("onCreate Called")
-
-        val settings = FirebaseFirestoreSettings.Builder()
-            .setPersistenceEnabled(true)
-            .setCacheSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
-            .build()
-        FirebaseFirestore.getInstance().firestoreSettings = settings
-
         installSplashScreen()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            enableEdgeToEdge()
-        }
+        // Check Google Play Services
+        checkGooglePlayServices()
+
         setContent {
+            val statisticsManager = remember { statisticsManager }
             CompositionLocalProvider(
-                LocalStatisticsManager provides statisticsManager,
-                LocalSettingsManager provides settingsManager
+                StatisticsManager.LocalStatisticsManager provides statisticsManager,
             ) {
-                KaviTheme {
-                    AppNavigation()
+                val settingsManager = remember { settingsManager }
+                CompositionLocalProvider(
+                    SettingsManager.LocalSettingsManager provides settingsManager
+                ) {
+                    KaviTheme {
+                        AppNavigation()
+                    }
                 }
             }
-            Timber.tag("MainActivity").d("setContent Launched")
+        }
+    }
+
+    private fun checkGooglePlayServices() {
+        try {
+            val availability = GoogleApiAvailability.getInstance()
+            val resultCode = availability.isGooglePlayServicesAvailable(this)
+            if (resultCode != ConnectionResult.SUCCESS) {
+                if (availability.isUserResolvableError(resultCode)) {
+                    availability.getErrorDialog(this, resultCode, 9000)?.show()
+                } else {
+                    Toast.makeText(this, "Device not supported", Toast.LENGTH_LONG).show()
+                    finish()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error checking Google Play Services")
         }
     }
 }

@@ -4,14 +4,13 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.mayor.kavi.data.models.GameScoreState
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.IOException
 
 class DataStoreManager(context: Context) {
-
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
-    private val dataStore = context.dataStore
-
     companion object {
         // Game Interface Mode
         private val INTERFACE_MODE_KEY = stringPreferencesKey("interface_mode")
@@ -21,7 +20,8 @@ class DataStoreManager(context: Context) {
         private val BOARD_COLOR_KEY = stringPreferencesKey("board_color_key")
         private val SHAKE_ENABLED_KEY = booleanPreferencesKey("shake_enabled")
         private val VIBRATION_ENABLED_KEY = booleanPreferencesKey("vibration_enabled")
-        
+        private val CUSTOM_GAMES_KEY = stringPreferencesKey("custom_games")
+
         private const val DEFAULT_BOARD_COLOR_KEY = "default"
         private const val DEFAULT_SHAKE_ENABLED = false
 
@@ -34,6 +34,13 @@ class DataStoreManager(context: Context) {
                 DataStoreManager(context).also { INSTANCE = it }
             }
         }
+    }
+
+    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+    private val dataStore = context.dataStore
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        prettyPrint = true
     }
 
     // Interface Mode (Classic vs AR)
@@ -79,4 +86,66 @@ class DataStoreManager(context: Context) {
         .map { preferences ->
             preferences[VIBRATION_ENABLED_KEY] != false  // Default to true
         }
+
+    suspend fun setBoardColor(color: String) {
+        dataStore.edit { preferences ->
+            preferences[BOARD_COLOR_KEY] = color
+        }
+    }
+
+    fun getBoardColor(): Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[BOARD_COLOR_KEY] ?: DEFAULT_BOARD_COLOR_KEY
+        }
+
+    // Custom game saves
+    suspend fun saveCustomGame(customGame: GameScoreState.CustomScoreState) {
+        dataStore.edit { preferences ->
+            val existingGamesJson = preferences[CUSTOM_GAMES_KEY] ?: "[]"
+            val existingGames = try {
+                json.decodeFromString<List<GameScoreState.CustomScoreState>>(existingGamesJson).toMutableList()
+            } catch (e: Exception) {
+                mutableListOf()
+            }
+
+            val gameIndex = existingGames.indexOfFirst { it.gameId == customGame.gameId }
+            if (gameIndex != -1) {
+                existingGames[gameIndex] = customGame
+            } else {
+                existingGames.add(customGame)
+            }
+
+            preferences[CUSTOM_GAMES_KEY] = json.encodeToString(existingGames)
+        }
+    }
+
+    fun loadCustomGames(): Flow<List<GameScoreState.CustomScoreState>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            try {
+                val gamesJson = preferences[CUSTOM_GAMES_KEY] ?: "[]"
+                json.decodeFromString<List<GameScoreState.CustomScoreState>>(gamesJson)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+    suspend fun deleteCustomGame(gameId: String) {
+        dataStore.edit { preferences ->
+            val existingGamesJson = preferences[CUSTOM_GAMES_KEY] ?: "[]"
+            val existingGames = try {
+                json.decodeFromString<List<GameScoreState.CustomScoreState>>(existingGamesJson).toMutableList()
+            } catch (e: Exception) {
+                mutableListOf()
+            }
+
+            existingGames.removeAll { it.gameId == gameId }
+            preferences[CUSTOM_GAMES_KEY] = json.encodeToString(existingGames)
+        }
+    }
 }

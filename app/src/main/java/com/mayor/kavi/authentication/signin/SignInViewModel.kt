@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.AuthResult
-import com.mayor.kavi.authentication.AuthRepository
+import com.mayor.kavi.data.repository.AuthRepository
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.AppViewModel
 import com.mayor.kavi.util.Result.*

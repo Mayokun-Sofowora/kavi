@@ -13,7 +13,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.authentication.AuthRepository
+import com.mayor.kavi.data.repository.AuthRepository
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.theme.*
 

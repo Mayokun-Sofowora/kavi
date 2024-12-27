@@ -1,57 +1,103 @@
 package com.mayor.kavi.ui.screens.boards
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.*
-import com.mayor.kavi.data.manager.LocalSettingsManager
+import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.*
-import com.mayor.kavi.util.DiceResultImage
-import com.mayor.kavi.ui.components.DiceRollAnimation
-import kotlinx.coroutines.launch
+import com.mayor.kavi.ui.components.*
+import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
+import com.mayor.kavi.util.BoardColors
+import com.mayor.kavi.util.GameBoard
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardTwoScreen(
-    viewModel: DiceViewModel = hiltViewModel(),
-    navController: NavController
+    viewModel: GameViewModel = hiltViewModel(),
+    navController: NavController,
+    onBack: () -> Unit
 ) {
-    var showExitGameDialog by remember { mutableStateOf(false) }
-    val scoreState by viewModel.scoreState.collectAsState()
-    val diceImages by viewModel.diceImages.collectAsState()
+    val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
-    var showWinDialog by remember { mutableStateOf(false) }
+    val diceImages by viewModel.diceImages.collectAsState()
+    val heldDice by viewModel.heldDice.collectAsState()
+    val isRollAllowed by viewModel.isRollAllowed.collectAsState()
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
-    val coroutineScope = rememberCoroutineScope()
-    val heldDice by viewModel.heldDice.collectAsState()
-    val greedState by viewModel.greedScoreState.collectAsState()
+    var showExitGameDialog by remember { mutableStateOf(false) }
 
-    // Back handler
-    BackHandler(enabled = true) {
-        if (showWinDialog) {
-            return@BackHandler
-        } else {
+    // Safe cast with early return if wrong game type
+    val greedState = (gameState as? GameScoreState.GreedScoreState) ?: run {
+        LaunchedEffect(Unit) {
             showExitGameDialog = true
+            onBack()
+        }
+        return
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.setSelectedBoard(GameBoard.GREED.modeName)
+        viewModel.resetGame()
+    }
+
+    // Handle AI turns
+    LaunchedEffect(greedState.currentPlayerIndex, isRolling) {
+        if (greedState.currentPlayerIndex == AI_PLAYER_ID.hashCode() && !greedState.isGameOver &&
+            !isRolling) {
+            delay(500) // Short initial delay
+
+            // Keep rolling until AI decides to bank or busts
+            while (greedState.currentPlayerIndex == AI_PLAYER_ID.hashCode() &&
+                !greedState.isGameOver) {
+                // Roll the dice
+                viewModel.rollDice()
+                delay(100) // Wait for roll animation and to show result
+
+                // If the turn score is 0, AI busted
+                if (greedState.turnScore == 0) {
+                    delay(500) // Wait a moment to show the bust
+                    viewModel.endGreedTurn()
+                    break
+                }
+
+                // Check if AI should bank
+                if (viewModel.shouldAIBank(
+                        currentTurnScore = greedState.turnScore,
+                        aiTotalScore = greedState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0,
+                        playerTotalScore = greedState.playerScores[0] ?: 0
+                    )
+                ) {
+                    delay(500) // Wait a moment before banking
+                    viewModel.endGreedTurn()
+                    break
+                }
+
+                delay(1000) // Wait before potentially rolling again
+            }
         }
     }
 
-    // Check for game over condition
-    LaunchedEffect(scoreState) {
-        showWinDialog = scoreState.isGameOver
+    // Reset held dice when player changes
+    LaunchedEffect(greedState.currentPlayerIndex) {
+        viewModel.resetHeldDice()
     }
 
     DisposableEffect(Unit) {
@@ -61,300 +107,162 @@ fun BoardTwoScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Greed (10,000)") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = colorResource(id = R.color.primary_container),
-                        titleContentColor = colorResource(id = R.color.on_primary_container)
-                    ),
-                    actions = {
-                        IconButton(
-                            onClick = { navController.navigate(Routes.Settings.route) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                modifier = Modifier.size(24.dp),
-                                tint = colorResource(id = R.color.on_primary_container)
-                            )
-                        }
-                    }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .then(
-                        when (val color = BoardColors.getColor(boardColor)) {
-                            is Color -> Modifier.background(color = color)
-                            is Brush -> Modifier.background(brush = color)
-                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
-                        }
-                    )
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Dice display area
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // First row of dice
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        diceImages.take(3).forEachIndexed { index, diceImage ->
-                            Box(
-                                modifier = Modifier
-                                    .clickable(
-                                        enabled = !isRolling,
-                                        onClick = { viewModel.toggleDiceHold(index) }
-                                    )
-                                    .background(
-                                        color = if (heldDice.contains(index)) colorResource(id = R.color.scrim).copy(
-                                            alpha = 0.2f
-                                        ) else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp) // Apply rounded corners to the background too
-                                    )
-                                    .padding(4.dp)
-                            ) {
-                                DiceRollAnimation(
-                                    isRolling = isRolling && !heldDice.contains(index),
-                                    diceImage = diceImage,
-                                    modifier = Modifier.size(100.dp)
-                                )
-                            }
-
-                        }
-                    }
-
-                    // Second row of dice
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        diceImages.drop(3).take(3).forEachIndexed { index, diceImage ->
-                            val index = index + 3
-                            Box(
-                                modifier = Modifier
-                                    .clickable(
-                                        enabled = !isRolling,
-                                        onClick = { viewModel.toggleDiceHold(index) }
-                                    )
-                                    .background(
-                                        color = if (heldDice.contains(index)) colorResource(id = R.color.scrim).copy(
-                                            alpha = 0.2f
-                                        ) else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp) // Apply rounded corners to the background too
-                                    )
-                                    .padding(4.dp)
-                            ) {
-                                DiceRollAnimation(
-                                    isRolling = isRolling && !heldDice.contains(index),
-                                    diceImage = diceImage,
-                                    modifier = Modifier.size(100.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Score display
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = colorResource(id = R.color.surface_variant),
-                        contentColor = colorResource(id = R.color.on_surface_variant)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Greed Dice",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Text(
-                            text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.fillMaxWidth(0.8f),
-                            color = colorResource(id = R.color.on_surface_variant)
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Total Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = if (greedState.resultMessage.isEmpty()) "0" else greedState.resultMessage,
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Bank Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${greedState.turnScore}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Game controls
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.rollDice(GameBoard.GREED.modeName)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary),
-                            disabledContainerColor = colorResource(id = R.color.outline),
-                            disabledContentColor = colorResource(id = R.color.on_surface_variant)
-                        ),
-                        modifier = Modifier.weight(1f),
-                        enabled = !isRolling
-                    ) {
-                        Text("Roll")
-                    }
-
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.bankGreedScore()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary),
-                            disabledContainerColor = colorResource(id = R.color.outline),
-                            disabledContentColor = colorResource(id = R.color.on_surface_variant)
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Bank Score")
-                    }
-                }
-                DiceResultImage(
-                    gameMode = GameBoard.GREED.modeName,
-                    diceResult = scoreState.resultMessage
-                )
-            }
-        }
-
-        // Win dialog
-        if (showWinDialog) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                AlertDialog(
-                    containerColor = colorResource(id = R.color.surface),
-                    titleContentColor = colorResource(id = R.color.on_surface),
-                    textContentColor = colorResource(id = R.color.on_surface),
-                    onDismissRequest = { navController.popBackStack() },
-                    title = { Text("Congratulations!") },
-                    text = { Text("You reached 10,000 points!") },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            }, colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            )
-                        ) {
-                            Text("Play Again")
-                        }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = {
-                                navController.navigate(Routes.Boards.route) {
-                                    popUpTo(Routes.Boards.route) { inclusive = true }
-                                }
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            }, colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            )
-                        ) {
-                            Text("Exit")
-                        }
-                    }
-                )
-                ConfettiAnimation()
-            }
-        }
-
-        // Exit dialog
-        if (showExitGameDialog) {
-            AlertDialog(containerColor = colorResource(id = R.color.surface),
-                titleContentColor = colorResource(id = R.color.on_surface),
-                textContentColor = colorResource(id = R.color.on_surface),
-                onDismissRequest = { showExitGameDialog = false },
-                title = { Text("Exit Game?") },
-                text = { Text("Are you sure you want to exit? Your progress will be lost.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            navController.navigate(Routes.Boards.route) {
-                                popUpTo(Routes.Boards.route) { inclusive = true }
-                            }
-                            viewModel.resetGame()
-                        }, colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        )
-                    ) {
-                        Text("Exit")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Greed Dice Game") },
+                navigationIcon = {
+                    IconButton(onClick = { showExitGameDialog = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
-                dismissButton = {
-                    Button(
-                        onClick = { showExitGameDialog = false },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        )
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colorResource(id = R.color.primary_container),
+                    titleContentColor = colorResource(id = R.color.on_primary_container)
+                ),
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Routes.Settings.route) },
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        Text("Cancel")
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(24.dp),
+                            tint = colorResource(id = R.color.on_primary_container)
+                        )
                     }
                 }
             )
         }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .then(
+                    when (val color = BoardColors.getColor(boardColor)) {
+                        is Color -> Modifier.background(color = color)
+                        is Brush -> Modifier.background(brush = color)
+                        else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                    }
+                )
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Score Display
+            ScoreDisplay(
+                gameMode = "Greed",
+                scores = greedState.playerScores,
+                currentTurnScore = greedState.turnScore,
+                message = greedState.message,
+                currentPlayerIndex = greedState.currentPlayerIndex
+            )
+
+            // Dice Display with holdable dice
+            DiceDisplay(
+                diceImages = diceImages,
+                isRolling = isRolling,
+                heldDice = heldDice,
+                isMyTurn = greedState.currentPlayerIndex != AI_PLAYER_ID.hashCode(),
+                onDiceHold = if (greedState.currentPlayerIndex != AI_PLAYER_ID.hashCode()
+                    && !isRolling) { index ->
+                    viewModel.toggleDiceHold(index)
+                } else null,
+                diceSize = 120.dp,
+                arrangement = DiceArrangement.GRID
+            )
+
+            // Scoring Combinations Info Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = colorResource(id = R.color.surface_variant)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Scoring Combinations",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    val scoringCombinations = listOf(
+                        "Straight (1-2-3-4-5-6): 1000",
+                        "Six of a Kind: Five of a kind × 2",
+                        "Five of a Kind: Four of a kind × 2",
+                        "Four of a Kind: Three of a kind × 2",
+                        "Three Pairs: 1000",
+                        "Three of a Kind (of 1): 1000",
+                        "Three of a Kind: Number × 100",
+                        "Single 1: 100",
+                        "Single 5: 50"
+                    )
+
+                    scoringCombinations.forEach { combination ->
+                        Text(
+                            text = combination,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Game Controls
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                GameControls(
+                    onRoll = { viewModel.rollDice() },
+                    onEndTurn = if (greedState.currentPlayerIndex == AI_PLAYER_ID.hashCode()) null
+                    else { -> viewModel.endGreedTurn() },
+                    isRolling = isRolling,
+                    canReroll = isRollAllowed &&
+                            !greedState.isGameOver &&
+                            greedState.currentPlayerIndex != AI_PLAYER_ID.hashCode() &&
+                            greedState.canReroll
+                )
+            }
+        }
+    }
+
+    // Game End Dialog
+    if (greedState.isGameOver) {
+        GameEndDialog(
+            message = greedState.message,
+            onPlayAgain = { viewModel.resetGame() },
+            onExit = onBack
+        )
+    }
+    
+    // Exit Game Dialog
+    if (showExitGameDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitGameDialog = false },
+            title = { Text("Exit Game") },
+            text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
+            confirmButton = {
+                TextButton(onClick = onBack) {
+                    Text("Exit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitGameDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

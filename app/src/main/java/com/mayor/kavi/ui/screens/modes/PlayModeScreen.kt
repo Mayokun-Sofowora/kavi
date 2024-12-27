@@ -3,7 +3,7 @@ package com.mayor.kavi.ui.screens.modes
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -16,11 +16,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.UserProfile
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.data.models.UserProfile
+import com.mayor.kavi.util.GameBoard
+import com.mayor.kavi.data.models.PlayMode
+import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.util.Result
 import com.mayor.kavi.ui.viewmodel.*
-import com.mayor.kavi.ui.viewmodel.DiceViewModel.PlayMode
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,14 +29,14 @@ import timber.log.Timber
 fun PlayModeScreen(
     navController: NavController,
     appViewModel: AppViewModel,
-    diceViewModel: DiceViewModel
+    gameViewModel: GameViewModel
 ) {
     val userProfileState by appViewModel.userProfileState.collectAsState()
-    val selectedBoard by diceViewModel.selectedBoard.collectAsState()
+    val selectedBoard by gameViewModel.selectedBoard.collectAsState()
 
     LaunchedEffect(Unit) {
         if (selectedBoard.isEmpty()) {
-            diceViewModel.setSelectedBoard(GameBoard.PIG.modeName)
+            gameViewModel.setSelectedBoard(GameBoard.PIG.modeName)
         }
     }
 
@@ -66,7 +67,7 @@ fun PlayModeScreen(
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = "Back",
                             modifier = Modifier.size(32.dp)
                         )
@@ -130,7 +131,7 @@ fun PlayModeScreen(
                         // Show loading state with preserved data if available
                         val preservedProfile = (userProfileState as Result.Loading).data
                         Text(
-                            text = "Welcome, ${preservedProfile?.name ?: "Guest"}!",
+                            text = "Welcome, ${preservedProfile?.name}!",
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -179,9 +180,9 @@ fun PlayModeScreen(
                 ) {
                     ElevatedButton(
                         onClick = {
-                            diceViewModel.setPlayMode(PlayMode.Multiplayer(""))
+                            gameViewModel.setPlayMode(PlayMode.Multiplayer)
                             Timber.tag("PlayModeScreen").d("Multiplayer button clicked")
-                            navigateToBoard(diceViewModel, navController)
+                            navigateToBoard(gameViewModel, navController)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -204,9 +205,9 @@ fun PlayModeScreen(
 
                     ElevatedButton(
                         onClick = {
-                            diceViewModel.setPlayMode(PlayMode.SinglePlayer)
+                            gameViewModel.setPlayMode(PlayMode.SinglePlayer)
                             Timber.tag("PlayModeScreen").d("SinglePlayer button clicked")
-                            navigateToBoard(diceViewModel, navController)
+                            navigateToBoard(gameViewModel, navController)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -234,33 +235,15 @@ fun PlayModeScreen(
     }
 }
 
-private fun navigateToBoard(diceViewModel: DiceViewModel, navController: NavController) {
-    Timber.tag("Navigation")
-        .d("GameMode: ${diceViewModel.playMode.value}, SelectedBoard: ${diceViewModel.selectedBoard.value}")
 
-    when (diceViewModel.playMode.value) {
-        is PlayMode.SinglePlayer -> {
-            when (diceViewModel.selectedBoard.value) {
-                GameBoard.PIG.modeName -> navController.navigate("boardOne")
-                GameBoard.GREED.modeName -> navController.navigate("boardTwo")
-                GameBoard.MEXICO.modeName -> navController.navigate("boardThree")
-                GameBoard.CHICAGO.modeName -> navController.navigate("boardFour")
-                GameBoard.BALUT.modeName -> navController.navigate("boardFive")
-                else -> Timber.tag("Navigation").d("No matching board for SinglePlayer mode")
-            }
-        }
-
-        is PlayMode.Multiplayer -> {
-            when (diceViewModel.selectedBoard.value) {
-                GameBoard.PIG.modeName -> navController.navigate("boardOne")
-                GameBoard.GREED.modeName -> navController.navigate("boardTwo")
-                GameBoard.MEXICO.modeName -> navController.navigate("boardThree")
-                GameBoard.CHICAGO.modeName -> navController.navigate("boardFour")
-                GameBoard.BALUT.modeName -> navController.navigate("boardFive")
-                else -> Timber.tag("Navigation").d("No matching board for Multiplayer mode")
-            }
-        }
-
-        else -> Timber.tag("Navigation").d("Unknown GameMode")
+private fun navigateToBoard(gameViewModel: GameViewModel, navController: NavController) {
+    if (gameViewModel.playMode.value is PlayMode.Multiplayer) {
+        Timber.tag("Navigation").d("Navigating to Multiplayer Lobby")
+        navController.navigate(Routes.Lobby.route)
+    } else if (gameViewModel.playMode.value is PlayMode.SinglePlayer) {
+        Timber.tag("Navigation").d("Navigating to Single Player Board")
+        navController.navigate(Routes.BoardTwo.route)
+    } else {
+        Timber.tag("Navigation").d("Unknown GameMode")
     }
 }

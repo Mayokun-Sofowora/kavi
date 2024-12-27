@@ -1,59 +1,86 @@
 package com.mayor.kavi.ui.screens.boards
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.*
-import com.mayor.kavi.data.manager.LocalSettingsManager
+import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.*
-import com.mayor.kavi.util.DiceResultImage
-import com.mayor.kavi.ui.components.DiceRollAnimation
-import kotlinx.coroutines.*
+import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
+import com.mayor.kavi.ui.components.*
+import com.mayor.kavi.util.BoardColors
+import com.mayor.kavi.util.GameBoard
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardOneScreen(
-    viewModel: DiceViewModel = hiltViewModel(),
-    navController: NavController
+    viewModel: GameViewModel = hiltViewModel(),
+    navController: NavController,
+    onBack: () -> Unit
 ) {
-    var showExitGameDialog by remember { mutableStateOf(false) }
-    val scoreState by viewModel.scoreState.collectAsState()
+    val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
-    var showWinDialog by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
-
+    val heldDice by viewModel.heldDice.collectAsState()
+    val isRollAllowed by viewModel.isRollAllowed.collectAsState()
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
+    var showExitGameDialog by remember { mutableStateOf(false) }
 
-    // Add BackHandler to prevent back navigation during game
-    BackHandler(enabled = true) {
-        if (showWinDialog) {
-            // Do nothing when dialog is shown
-            return@BackHandler
-        } else {
-            // Show confirmation dialog before exiting game
+    // Safe cast with early return if wrong game type
+    val pigState = (gameState as? GameScoreState.PigScoreState) ?: run {
+        LaunchedEffect(Unit) {
             showExitGameDialog = true
+            onBack()
         }
+        return
     }
 
-    // Launched effects only used once when the component is composed
+    LaunchedEffect(Unit) {
+        viewModel.setSelectedBoard(GameBoard.PIG.modeName)
+        viewModel.resetGame()
+    }
 
-    // Check for game over condition
-    LaunchedEffect(scoreState) {
-        showWinDialog = scoreState.isGameOver
+    // Handle AI turns
+    LaunchedEffect(pigState.currentPlayerIndex, isRolling) {
+        if (pigState.currentPlayerIndex == AI_PLAYER_ID.hashCode() && !pigState.isGameOver && !isRolling) {
+            delay(1000) // Initial delay before AI turn
+
+            // First roll
+            viewModel.rollDice()
+            delay(2000) // Wait for roll animation
+
+            // After the roll completes, check if AI should bank
+            if (!pigState.isGameOver && pigState.currentTurnScore > 0 &&
+                viewModel.shouldAIBank(
+                    currentTurnScore = pigState.currentTurnScore,
+                    aiTotalScore = pigState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0,
+                    playerTotalScore = pigState.playerScores[0] ?: 0
+                )
+            ) {
+                delay(1000)
+                viewModel.endPigTurn()
+            } else if (!pigState.isGameOver && pigState.currentPlayerIndex == AI_PLAYER_ID.hashCode()) {
+                // If AI decides to roll again
+                delay(1000)
+                viewModel.rollDice()
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -63,77 +90,76 @@ fun BoardOneScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text("Pig")
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = colorResource(id = R.color.primary_container),
-                        titleContentColor = colorResource(id = R.color.on_primary_container)
-                    ),
-                    actions = {
-                        IconButton(
-                            onClick = { navController.navigate(Routes.Settings.route) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                modifier = Modifier.size(24.dp),
-                                tint = colorResource(id = R.color.on_primary_container)
-                            )
-                        }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Pig Dice Game") },
+                navigationIcon = {
+                    IconButton(onClick = { showExitGameDialog = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .then(
-                        when (val color = BoardColors.getColor(boardColor)) {
-                            is Color -> Modifier.background(color = color)
-                            is Brush -> Modifier.background(brush = color)
-                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
-                        }
-                    )
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Dice display area
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // First row of dice
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colorResource(id = R.color.primary_container),
+                    titleContentColor = colorResource(id = R.color.on_primary_container)
+                ),
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Routes.Settings.route) },
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        DiceRollAnimation(
-                            isRolling = isRolling,
-                            diceImage = diceImages.firstOrNull() ?: R.drawable.empty_dice,
-                            modifier = Modifier.size(150.dp)
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(24.dp),
+                            tint = colorResource(id = R.color.on_primary_container)
                         )
                     }
                 }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .then(
+                    when (val color = BoardColors.getColor(boardColor)) {
+                        is Color -> Modifier.background(color = color)
+                        is Brush -> Modifier.background(brush = color)
+                        else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                    }
+                )
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Score Display
+            ScoreDisplay(
+                gameMode = "Pig",
+                scores = pigState.playerScores,
+                currentTurnScore = pigState.currentTurnScore,
+                message = pigState.message,
+                currentPlayerIndex = pigState.currentPlayerIndex
+            )
 
-                Spacer(modifier = Modifier.height(24.dp))
+            // Dice Display (Pig only uses one die)
+            DiceDisplay(
+                diceImages = diceImages.take(1),
+                isRolling = isRolling,
+                heldDice = heldDice,
+                isMyTurn = pigState.currentPlayerIndex != AI_PLAYER_ID.hashCode(),
+                onDiceHold = null, // Pig doesn't use held dice
+                diceSize = 150.dp,
+                arrangement = DiceArrangement.ROW
+            )
 
-                // Score display
+            // Turn Score Display
+            if (pigState.currentTurnScore > 0) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = colorResource(id = R.color.surface_variant),
-                        contentColor = colorResource(id = R.color.on_surface_variant)
+                        containerColor = colorResource(id = R.color.surface_variant)
                     )
                 ) {
                     Column(
@@ -141,172 +167,53 @@ fun BoardOneScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Pig Dice",
-                            style = MaterialTheme.typography.titleLarge
+                            text = "Turn Score",
+                            style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            text = "${pigState.currentTurnScore}",
+                            style = MaterialTheme.typography.headlineMedium
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.fillMaxWidth(0.8f),
-                            color = colorResource(id = R.color.on_surface_variant)
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Overall Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${scoreState.overallScore}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Turn Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${scoreState.currentTurnScore}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
-                // Game controls
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.rollDice(GameBoard.PIG.modeName)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary),
-                            disabledContainerColor = colorResource(id = R.color.outline),
-                            disabledContentColor = colorResource(id = R.color.on_surface_variant)
-                        ),
-                        modifier = Modifier.weight(1f),
-                        enabled = !isRolling,
-                    ) {
-                        Text("Roll")
-                    }
-
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.endPigTurn()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        ),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("End Turn")
-                    }
-                }
-
-                DiceResultImage(
-                    gameMode = GameBoard.PIG.modeName,
-                    diceResult = scoreState.resultMessage
-                )
-
             }
-        }
 
-        if (showWinDialog) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                ConfettiAnimation()
-                AlertDialog(
-                    containerColor = colorResource(id = R.color.surface),
-                    titleContentColor = colorResource(id = R.color.on_surface),
-                    textContentColor = colorResource(id = R.color.on_surface),
-                    onDismissRequest = { navController.popBackStack() },
-                    title = { Text("Congratulations!") },
-                    text = { Text("You win with ${scoreState.overallScore} points!") },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            }, colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            )
-                        ) {
-                            Text("Play Again")
-                        }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = {
-                                navController.navigate(Routes.Boards.route) {
-                                    popUpTo(Routes.Boards.route) { inclusive = true }
-                                }
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            )
-                        ) {
-                            Text("Exit")
-                        }
-                    }
-                )
-                ConfettiAnimation()
-            }
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Game Controls
+            GameControls(
+                onRoll = { viewModel.rollDice() },
+                onEndTurn = if (pigState.currentPlayerIndex == AI_PLAYER_ID.hashCode()) null
+                else { -> viewModel.endPigTurn() },
+                isRolling = isRolling,
+                canReroll = isRollAllowed && !pigState.isGameOver &&
+                        pigState.currentPlayerIndex != AI_PLAYER_ID.hashCode()
+            )
         }
     }
 
-    // Add Exit Game Dialog
+    // Game End Dialog
+    if (pigState.isGameOver) {
+        GameEndDialog(
+            message = pigState.message,
+            onPlayAgain = { viewModel.resetGame() },
+            onExit = onBack
+        )
+    }
+
+    // Exit Game Dialog
     if (showExitGameDialog) {
-        AlertDialog(containerColor = colorResource(id = R.color.surface),
-            titleContentColor = colorResource(id = R.color.on_surface),
-            textContentColor = colorResource(id = R.color.on_surface),
+        AlertDialog(
             onDismissRequest = { showExitGameDialog = false },
-            title = { Text("Exit Game?") },
-            text = { Text("Are you sure you want to exit? Your progress will be lost.") },
+            title = { Text("Exit Game") },
+            text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        navController.navigate(Routes.Boards.route) {
-                            popUpTo(Routes.Boards.route) { inclusive = true }
-                        }
-                        viewModel.resetGame()
-                    }, colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    )
-                ) {
+                TextButton(onClick = onBack) {
                     Text("Exit")
                 }
             },
             dismissButton = {
-                Button(
-                    onClick = { showExitGameDialog = false }, colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    )
-                ) {
+                TextButton(onClick = { showExitGameDialog = false }) {
                     Text("Cancel")
                 }
             }

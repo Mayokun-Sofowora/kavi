@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.mayor.kavi.authentication.signin.SignInScreen
 import com.mayor.kavi.authentication.signup.SignUpScreen
-import com.mayor.kavi.ui.screens.*
+import com.mayor.kavi.ui.screens.LobbyScreen
 import com.mayor.kavi.ui.screens.modes.*
 import com.mayor.kavi.ui.screens.boards.*
 import com.mayor.kavi.ui.screens.main.*
@@ -16,12 +18,11 @@ import com.mayor.kavi.ui.viewmodel.*
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    val diceViewModel = hiltViewModel<DiceViewModel>()
+    val gameViewModel = hiltViewModel<GameViewModel>()
     val appViewModel = hiltViewModel<AppViewModel>()
 
     NavHost(
-        navController = navController,
-        startDestination = Routes.SignIn.route,
+        navController = navController, startDestination = Routes.SignIn.route,
         modifier = Modifier.fillMaxSize()
     ) {
         // Authentication
@@ -34,47 +35,89 @@ fun AppNavigation() {
             InterfaceModeScreen(viewModel = appViewModel, navController = navController)
         }
         // AR Screen
-        composable(Routes.ArScreen.route) {
-//            VirtualScreen(viewModel = diceViewModel,
-//            onNavigateBack = { navController.popBackStack() })
-        }
+        composable(Routes.ArScreen.route) {}
         // Board Games
         composable(Routes.Boards.route) {
-            BoardsScreen(viewModel = diceViewModel, navController = navController)
+            BoardsScreen(viewModel = gameViewModel, navController = navController)
         }
         // Play mode
         composable(Routes.PlayMode.route) {
             PlayModeScreen(
-                navController = navController,
-                diceViewModel = diceViewModel,
+                navController = navController, gameViewModel = gameViewModel,
                 appViewModel = appViewModel
             )
         }
         // Game Boards
-        composable("boardOne") {
-            BoardOneScreen(viewModel = diceViewModel, navController = navController)
+        composable(Routes.BoardOne.route) {
+            BoardOneScreen(
+                viewModel = gameViewModel, onBack = { navController.popBackStack() },
+                navController = navController
+            )
         }
-        composable("boardTwo") {
-            BoardTwoScreen(viewModel = diceViewModel, navController = navController)
+        composable(Routes.BoardTwo.route) {
+            BoardTwoScreen(
+                viewModel = gameViewModel,
+                onBack = {
+                    navController.navigate(Routes.Boards.route) {
+                        popUpTo(Routes.Boards.route) {
+                            inclusive = true
+                        }
+                    }
+                },
+                navController = navController
+            )
         }
-        composable("boardThree") {
-            BoardThreeScreen(viewModel = diceViewModel, navController = navController)
+        composable(
+            route = Routes.MultiplayerBoard.route + "/{sessionId}",
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
+            MultiplayerBoardScreen(
+                viewModel = gameViewModel,
+                onBack = {
+                    navController.navigate(Routes.Boards.route) {
+                        popUpTo(Routes.Boards.route) {
+                            inclusive = true
+                        }
+                    }
+                }
+            )
         }
-        composable("boardFour") {
-            BoardFourScreen(viewModel = diceViewModel, navController = navController)
+        composable(Routes.BoardThree.route) {
+            BoardThreeScreen(
+                viewModel = gameViewModel,
+                onBack = {
+                    navController.navigate(Routes.Boards.route) {
+                        popUpTo(Routes.Boards.route) {
+                            inclusive = true
+                        }
+                    }
+                },
+                navController = navController
+            )
         }
-        composable("boardFive") {
-            BoardFiveScreen(viewModel = diceViewModel, navController = navController)
+        composable(Routes.BoardFour.route) {
+            BoardFourScreen(
+                viewModel = gameViewModel, onBack = { navController.popBackStack() },
+                navController = navController
+            )
+        }
+
+        // Multiplayer Lobby
+        composable(Routes.Lobby.route) {
+            LobbyScreen(
+                navController = navController, appViewModel = appViewModel,
+                gameViewModel = gameViewModel
+            )
         }
         // Settings
         composable(Routes.Settings.route) {
-            SettingsScreen(viewModel = diceViewModel, navController = navController)
+            SettingsScreen(viewModel = gameViewModel, navController = navController)
         }
         // Statistics
         composable(Routes.Statistics.route) {
             StatisticsScreen(
-                appViewModel = appViewModel,
-                diceViewModel = diceViewModel,
+                appViewModel = appViewModel, gameViewModel = gameViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -82,10 +125,15 @@ fun AppNavigation() {
         composable(Routes.Instructions.route) {
             InstructionsScreen(onClose = { navController.popBackStack() })
         }
-        composable(Routes.InstructionsShort.route) {
+        composable(
+            route = Routes.InstructionsShort.route + "/{page}",
+            arguments = listOf(navArgument("page") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val page = backStackEntry.arguments?.getInt("page") ?: 1
             InstructionsScreen(
                 onClose = { navController.popBackStack() },
-                startPage = 1, showOnlyPage = true
+                startPage = page,
+                showOnlyPage = true
             )
         }
         // Sign Out
@@ -102,8 +150,14 @@ sealed class Routes(val route: String) {
     object Start : Routes("start")
     object ArScreen : Routes("arScreen")
     object Boards : Routes("classicBoards")
+    object BoardOne : Routes("boardOne")
+    object BoardTwo : Routes("boardTwo")
+    object BoardThree : Routes("boardThree")
+    object BoardFour : Routes("boardFour")
+    object MultiplayerBoard : Routes("multiplayerBoard")
     object PlayMode : Routes("playMode")
     object Settings : Routes("settings")
+    object Lobby : Routes("lobby")
     object Instructions : Routes("instructions/full")
     object InstructionsShort : Routes("instructions/short")
     object Statistics : Routes("statistics")

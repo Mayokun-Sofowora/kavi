@@ -3,6 +3,7 @@ package com.mayor.kavi.ui.screens.modes
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -11,16 +12,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
+import androidx.navigation.*
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.util.GameBoard
 import com.mayor.kavi.ui.Routes
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardsScreen(
-    viewModel: DiceViewModel,
+    viewModel: GameViewModel,
     navController: NavHostController
 ) {
     var selectedGameMode by remember { mutableStateOf<String?>(null) }
@@ -39,7 +41,7 @@ fun BoardsScreen(
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = "Back",
                             modifier = Modifier.size(32.dp)
                         )
@@ -62,9 +64,8 @@ fun BoardsScreen(
             val boards = listOf(
                 Triple(GameBoard.PIG.modeName, "Single die dice game", R.drawable.pig),
                 Triple(GameBoard.GREED.modeName, "Race to 10,000 points", R.drawable.greed),
-                Triple(GameBoard.MEXICO.modeName, "Highest score wins", R.drawable.mexico),
-                Triple(GameBoard.CHICAGO.modeName, "11 rounds of strategy", R.drawable.chicago),
-                Triple(GameBoard.BALUT.modeName, "Yahtzee-style scoring", R.drawable.balut)
+                Triple(GameBoard.BALUT.modeName, "Yahtzee-style scoring", R.drawable.balut),
+                Triple(GameBoard.CUSTOM.modeName, "Your custom dice board", R.drawable.logo)
             )
 
             boards.forEach { (boardName, description, image) ->
@@ -76,9 +77,8 @@ fun BoardsScreen(
                     backgroundColor = when (boardName) {
                         GameBoard.PIG.modeName -> Color(0xFFFCD5CE)
                         GameBoard.GREED.modeName -> Color(0xFFFEC89A)
-                        GameBoard.MEXICO.modeName -> Color(0xFFE5E5E5)
-                        GameBoard.CHICAGO.modeName -> Color(0xFFF9DCC4)
                         GameBoard.BALUT.modeName -> Color(0xFFFFB5A7)
+                        GameBoard.CUSTOM.modeName -> Color(0xFFE5E5E5)
                         else -> Color(0xFFFFB5A7)
                     },
                     onSelect = {
@@ -95,7 +95,11 @@ fun BoardsScreen(
                 onClick = {
                     selectedGameMode?.let {
                         viewModel.setSelectedBoard(it)
-                        navController.navigate(Routes.PlayMode.route)
+                        if (it == GameBoard.GREED.modeName) {
+                            navController.navigate(Routes.PlayMode.route)
+                        } else {
+                            navigateToBoard(viewModel, navController)
+                        }
                     }
                 },
                 enabled = selectedGameMode != null,
@@ -176,5 +180,17 @@ private fun BoardSelectionCard(
                 )
             }
         }
+    }
+}
+
+private fun navigateToBoard(gameViewModel: GameViewModel, navController: NavController) {
+    Timber.tag("Navigation")
+        .d("GameMode: ${gameViewModel.playMode.value}, SelectedBoard: ${gameViewModel.selectedBoard.value}")
+    when (gameViewModel.selectedBoard.value) {
+        GameBoard.PIG.modeName -> navController.navigate(Routes.BoardOne.route)
+        GameBoard.GREED.modeName -> navController.navigate(Routes.PlayMode.route)
+        GameBoard.BALUT.modeName -> navController.navigate(Routes.BoardThree.route)
+        GameBoard.CUSTOM.modeName -> navController.navigate(Routes.BoardFour.route)
+        else -> Timber.tag("Navigation").d("No matching board for SinglePlayer mode")
     }
 }

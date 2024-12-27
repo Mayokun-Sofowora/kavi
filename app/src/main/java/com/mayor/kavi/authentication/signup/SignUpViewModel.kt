@@ -2,14 +2,11 @@ package com.mayor.kavi.authentication.signup
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.navigation.NavController
-import com.mayor.kavi.authentication.AuthRepository
-import com.mayor.kavi.data.Avatar
-import com.mayor.kavi.data.GameRepository
-import com.mayor.kavi.data.UserProfile
-import com.mayor.kavi.ui.Routes
+import com.mayor.kavi.data.repository.AuthRepository
+import com.mayor.kavi.data.models.Avatar
+import com.mayor.kavi.data.models.UserProfile
+import com.mayor.kavi.data.repository.UserRepository
 import com.mayor.kavi.ui.viewmodel.AppViewModel
-import com.mayor.kavi.util.Result
 import com.mayor.kavi.util.Result.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +22,7 @@ data class SignUpState(
 @HiltViewModel
 class SignUpViewModel @Inject constructor(
     private val repository: AuthRepository,
-    private val gameRepository: GameRepository
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _signUpState = MutableStateFlow(SignUpState())
@@ -35,7 +32,6 @@ class SignUpViewModel @Inject constructor(
         username: String,
         email: String,
         password: String,
-        navController: NavController,
         appViewModel: AppViewModel
     ) {
         // Launch a coroutine to perform sign-up operation
@@ -44,13 +40,13 @@ class SignUpViewModel @Inject constructor(
             repository.createUser(username, email, password).collect { result ->
                 when (result) {
                     is Success -> {
-                        val userId = gameRepository.getCurrentUserId()
+                        val userId = userRepository.getCurrentUserId()
                         val userProfile = UserProfile(
                             id = userId.toString(),
                             name = username,
                             email = email,
-                            avatar = Avatar.DEFAULT, // set default avatar
-                            favoriteGames = emptyList()
+                            avatar = Avatar.DEFAULT,
+                            lastSeen = System.currentTimeMillis()
                         )
                         appViewModel.createUserProfile(userProfile)
                         _signUpState.value = SignUpState(

@@ -1,39 +1,46 @@
 package com.mayor.kavi.util
 
-import android.content.Context
 import android.net.*
 import androidx.lifecycle.LiveData
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * A class that monitors network connectivity status using LiveData.
  * It notifies observers when the network becomes available or is lost.
  */
+@Singleton
 class NetworkConnection @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val connectivityManager: ConnectivityManager
 ) : LiveData<Boolean>() {
-
-    private val networkRequest: NetworkRequest = NetworkRequest.Builder()
-        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) // Specify the capability
-        .build()
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            super.onAvailable(network)
-            postValue(true)
+            _isConnected.value = true
         }
 
         override fun onLost(network: Network) {
-            super.onLost(network)
-            postValue(false)
+            _isConnected.value = false
         }
+    }
+
+    init {
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+        _isConnected.value = isConnected()
     }
 
     override fun onActive() {
         super.onActive()
-        connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
     }
 
     override fun onInactive() {
@@ -50,4 +57,6 @@ class NetworkConnection @Inject constructor(
         val capabilities = connectivityManager.getNetworkCapabilities(network)
         return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
+
+    fun asFlow(): Flow<Boolean> = isConnected
 }

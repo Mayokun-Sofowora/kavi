@@ -1,45 +1,36 @@
 package com.mayor.kavi.ui.viewmodel
 
 import androidx.lifecycle.*
-import com.google.firebase.auth.FirebaseAuth
-import com.mayor.kavi.data.*
 import com.mayor.kavi.data.manager.DataStoreManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
-import timber.log.Timber
 import javax.inject.Inject
 import com.mayor.kavi.util.Result
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
-import com.mayor.kavi.util.dataOrNull
+import com.mayor.kavi.data.models.UserProfile
+import com.mayor.kavi.data.repository.UserRepository
+import com.mayor.kavi.util.Result.*
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val auth: FirebaseAuth,
-    private val gameRepository: GameRepository
+    private val userRepository: UserRepository
 ) : ViewModel() {
     private val diceDataStore = DataStoreManager.getInstance(context)
 
-    // App-wide settings and modes
-    val interfaceMode: StateFlow<String> = diceDataStore.getInterfaceMode()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
-        )
-
     // User state
-    private val _userProfileState: MutableStateFlow<Result<UserProfile>> =
-        MutableStateFlow(Result.Loading(null))
-    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState.asStateFlow()
+    private val _userProfileState = MutableStateFlow<Result<UserProfile>>(Loading())
+    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState
 
     private val _loginComplete = MutableStateFlow(false)
     val loginComplete: StateFlow<Boolean> = _loginComplete.asStateFlow()
 
     init {
-        loadUserProfile()
+        viewModelScope.launch {
+            loadUserProfile()
+        }
     }
 
     // Settings methods
@@ -47,44 +38,41 @@ class AppViewModel @Inject constructor(
         diceDataStore.setInterfaceMode(mode)
     }
 
-    fun loadUserProfile() = viewModelScope.launch {
-        _userProfileState.value = Result.Loading(_userProfileState.value.dataOrNull)
-        try {
-            val currentUserId = gameRepository.getCurrentUserId()
-            if (currentUserId == null) {
-                _userProfileState.value = Result.Error("User not logged in", null)
-                return@launch
+    fun loadUserProfile() {
+        viewModelScope.launch {
+            _userProfileState.value = Loading() // Indicate loading
+            val userId = userRepository.getCurrentUserId()
+
+            if (userId != null) {
+                val result = userRepository.getUserById(userId)
+                _userProfileState.emit(result)
+
+            } else {
+                _userProfileState.emit(Error("Not logged in"))
             }
-            gameRepository.getUserById(currentUserId).fold(
-                onSuccess = { profile ->
-                    _userProfileState.value = Result.Success(profile)
-                },
-                onFailure = { exception ->
-                    _userProfileState.value = Result.Error(
-                        exception.message ?: "Failed to load user profile",
-                        exception
-                    )
-                    Timber.e(exception)
-                }
-            )
-        } catch (e: Exception) {
-            _userProfileState.value = Result.Error("Failed to load user profile", e)
-            Timber.e(e)
         }
     }
 
     fun updateUserProfile(profile: UserProfile) = viewModelScope.launch {
-        _userProfileState.value = Result.Loading(profile)
-        gameRepository.updateUserProfile(profile).fold(
-            onSuccess = {loadUserProfile()},
-            onFailure = {exception ->
-                _userProfileState.value = Result.Error(
-                    exception.message ?: "Failed to update user profile",
-                    exception
-                )
-                Timber.e(exception)
+        _userProfileState.value = Loading(profile) // Set loading state with profile data
+
+        val result = userRepository.updateUserProfile(profile)
+        loadUserProfile()
+
+        _userProfileState.value = when (result) {
+            is Success -> {
+                loadUserProfile()
+                Success(profile)
             }
-        )
+
+            is Error -> {
+                Error(result.message, result.exception, profile)
+            }
+
+            else -> {
+                Error("Unknown error", data = profile)
+            }
+        }
     }
 
     // Login methods
@@ -94,6 +82,9 @@ class AppViewModel @Inject constructor(
 
     fun onLoginComplete() {
         _loginComplete.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            userRepository.setUserOnlineStatus(true)
+        }
     }
 
     fun onLoginCancel() {
@@ -101,18 +92,23 @@ class AppViewModel @Inject constructor(
     }
 
     fun createUserProfile(userProfile: UserProfile) = viewModelScope.launch {
-        _userProfileState.value = Result.Loading(null)
-        gameRepository.updateUserProfile(userProfile).fold(
-            onSuccess = {
-                _userProfileState.value = Result.Success(userProfile)
-            },
-            onFailure = { exception ->
-                _userProfileState.value = Result.Error(
-                    exception.message ?: "Failed to create user profile",
-                    exception
-                )
-            }
-        )
+        _userProfileState.value = Loading()
+        val result = userRepository.updateUserProfile(userProfile)
+
+        _userProfileState.value = if (result is Success) {
+            Success(userProfile) // Set the user profile on success
+        } else if (result is Error) {
+            Error(result.message, result.exception) // Set the error if any
+        } else {
+            Loading()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        viewModelScope.launch(Dispatchers.IO) {
+            userRepository.setUserOnlineStatus(false)
+        }
     }
 
 }

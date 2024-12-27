@@ -1,53 +1,100 @@
 package com.mayor.kavi.ui.screens.boards
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.*
-import com.mayor.kavi.data.manager.LocalSettingsManager
+import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
+import com.mayor.kavi.data.models.GameScoreState
 import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.ui.components.DiceRollAnimation
-import com.mayor.kavi.ui.viewmodel.*
-import com.mayor.kavi.util.DiceResultImage
+import com.mayor.kavi.ui.components.*
+import com.mayor.kavi.ui.viewmodel.GameViewModel
+import com.mayor.kavi.util.*
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardThreeScreen(
-    viewModel: DiceViewModel = hiltViewModel(),
-    navController: NavController
+    viewModel: GameViewModel = hiltViewModel(),
+    navController: NavController,
+    onBack: () -> Unit
 ) {
-    var showExitGameDialog by remember { mutableStateOf(false) }
-    val scoreState by viewModel.scoreState.collectAsState()
-    val diceImages by viewModel.diceImages.collectAsState()
+    val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
-    var showWinDialog by remember { mutableStateOf(false) }
-    val mexicoState by viewModel.mexicoScoreState.collectAsState()
+    val diceImages by viewModel.diceImages.collectAsState()
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    val heldDice by viewModel.heldDice.collectAsState()
+    val isRollAllowed by viewModel.isRollAllowed.collectAsState()
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
+    var showExitGameDialog by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = true) {
-        if (showWinDialog) {
-            return@BackHandler
-        } else {
+    // Safe cast with early return if wrong game type
+    val balutState = (gameState as? GameScoreState.BalutScoreState) ?: run {
+        LaunchedEffect(Unit) {
             showExitGameDialog = true
+            onBack()
+        }
+        return
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.setSelectedBoard(GameBoard.BALUT.modeName)
+        viewModel.resetGame()
+    }
+
+    // Add launched effect for ai turns
+    LaunchedEffect(balutState.currentPlayerIndex) {
+        viewModel.resetHeldDice()
+        selectedCategory = null // Reset category when player changes
+
+        // Handle AI turn if it's AI's turn
+        if (balutState.currentPlayerIndex == GameViewModel.AI_PLAYER_ID.hashCode() &&
+            !balutState.isGameOver
+            && !isRolling
+        ) {
+            delay(500)
+
+            // First roll
+            viewModel.rollDice()
+            delay(1000)
+
+            // Second roll if needed
+            if (balutState.rollsLeft > 0) {
+                viewModel.rollDice()
+                delay(1000)
+            }
+
+            // Final roll if needed
+            if (balutState.rollsLeft > 0) {
+                viewModel.rollDice()
+                delay(1000)
+            }
+
+            // Let AI choose category and end turn
+            val diceResults = viewModel.getCurrentRolls()
+            val category = viewModel.chooseAICategory(diceResults)
+            delay(1000)
+            viewModel.endBalutTurn(category)
         }
     }
 
-    // Check for game over condition
-    LaunchedEffect(scoreState) {
-        showWinDialog = scoreState.isGameOver
+    // Reset held dice when player changes
+    LaunchedEffect(balutState.currentPlayerIndex) {
+        viewModel.resetHeldDice()
+        selectedCategory = null // Reset category when player changes
     }
 
     DisposableEffect(Unit) {
@@ -57,242 +104,245 @@ fun BoardThreeScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Mexico") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = colorResource(id = R.color.primary_container),
-                        titleContentColor = colorResource(id = R.color.on_primary_container)
-                    ),
-                    actions = {
-                        IconButton(
-                            onClick = { navController.navigate(Routes.Settings.route) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                modifier = Modifier.size(24.dp),
-                                tint = colorResource(id = R.color.on_primary_container)
-                            )
-                        }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Balut Dice Game") },
+                navigationIcon = {
+                    IconButton(onClick = { showExitGameDialog = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .then(
-                        when (val color = BoardColors.getColor(boardColor)) {
-                            is Color -> Modifier.background(color = color)
-                            is Brush -> Modifier.background(brush = color)
-                            else -> Modifier.background(color = BoardColors.getColor("default") as Color)
-                        }
-                    )
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Dice display
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    diceImages.take(2).forEach { diceImage ->
-                        DiceRollAnimation(
-                            isRolling = isRolling,
-                            diceImage = diceImage,
-                            modifier = Modifier.size(150.dp)
+                },
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Routes.Settings.route) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(24.dp),
+                            tint = colorResource(id = R.color.on_primary_container)
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colorResource(id = R.color.primary_container),
+                    titleContentColor = colorResource(id = R.color.on_primary_container)
+                )
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .then(
+                    when (val color = BoardColors.getColor(boardColor)) {
+                        is Color -> Modifier.background(color = color)
+                        is Brush -> Modifier.background(brush = color)
+                        else -> Modifier.background(color = BoardColors.getColor("default") as Color)
+                    }
+                ),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Game Info
+            item {
+                GameInfoCard(balutState)
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Score display
+            // Dice Display and Controls
+            item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = colorResource(id = R.color.surface_variant),
-                        contentColor = colorResource(id = R.color.on_surface_variant)
-                    )
+                        containerColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "Mexico Dice",
-                            style = MaterialTheme.typography.titleLarge
+                        DiceDisplay(
+                            diceImages = diceImages,
+                            isRolling = isRolling,
+                            heldDice = heldDice,
+                            isMyTurn = true,
+                            onDiceHold = { viewModel.toggleDiceHold(it) }
                         )
-                        Text(
-                            text = if (mexicoState.currentRoundNumber == 1) "First Round" else "Round ${mexicoState.currentRoundNumber}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                        Text(
-                            text = scoreState.resultMessage,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.fillMaxWidth(0.8f),
-                            color = colorResource(id = R.color.on_tertiary_container)
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Lives",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${mexicoState.lives}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Current Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${scoreState.currentTurnScore}", // this was scoreState.currentScore
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Total Score",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = "${mexicoState.roundScores.sum()}",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                        }
-                        Text(
-                            text = mexicoState.gameStatus,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 8.dp)
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Game Controls
+                        GameControls(
+                            onRoll = { viewModel.rollDice() },
+                            onSelectedCategory = if (selectedCategory != null) {
+                                { viewModel.endBalutTurn(selectedCategory!!) }
+                            } else null,
+                            isRolling = isRolling,
+                            canReroll = isRollAllowed &&
+                                    !balutState.isGameOver &&
+                                    balutState.rollsLeft > 0
                         )
                     }
                 }
+            }
 
-                // Roll button
-                Button(
-                    onClick = {
-                        viewModel.rollDice(GameBoard.MEXICO.modeName)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary),
-                        disabledContainerColor = colorResource(id = R.color.outline),
-                        disabledContentColor = colorResource(id = R.color.on_surface_variant)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = !isRolling
-                ) {
-                    Text("Roll")
-                }
+            // Score Categories
+            item {
+                BalutCategoriesCard(
+                    currentPlayerIndex = balutState.currentPlayerIndex,
+                    playerScores = balutState.playerScores,
+                    selectedCategory = selectedCategory,
+                    onCategorySelect = { selectedCategory = it }
+                )
+            }
 
-                DiceResultImage(
-                    gameMode = GameBoard.MEXICO.modeName,
-                    diceResult = scoreState.resultMessage
+            // Score Display
+            item {
+                BalutScoreDisplay(
+                    playerScores = balutState.playerScores[0] ?: emptyMap(),
+                    aiScores = balutState.playerScores[GameViewModel.AI_PLAYER_ID.hashCode()]
+                        ?: emptyMap()
                 )
             }
         }
-        // Win dialog
-        if (showWinDialog) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                AlertDialog(
-                    onDismissRequest = { navController.popBackStack() },
-                    title = { Text("Congratulations!") },
-                    text = { Text("You won with ${mexicoState.roundScores.sum()} points!") },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            }, colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            )
-                        ) {
-                            Text("Play Again")
-                        }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = {
-                                navController.navigate(Routes.Boards.route) {
-                                    popUpTo(Routes.Boards.route) { inclusive = true }
-                                }
-                                showWinDialog = false
-                                viewModel.resetGame()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colorResource(id = R.color.primary),
-                                contentColor = colorResource(id = R.color.on_primary)
-                            ),
-                        ) {
-                            Text("Exit")
-                        }
-                    }
-                )
-                ConfettiAnimation()
-            }
-        }
+    }
 
-        // Exit dialog
-        if (showExitGameDialog) {
-            AlertDialog(containerColor = colorResource(id = R.color.surface),
-                titleContentColor = colorResource(id = R.color.on_surface),
-                textContentColor = colorResource(id = R.color.on_surface),
-                onDismissRequest = { showExitGameDialog = false },
-                title = { Text("Exit Game?") },
-                text = { Text("Are you sure you want to exit? Your progress will be lost.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            navController.navigate(Routes.Boards.route) {
-                                popUpTo(Routes.Boards.route) { inclusive = true }
-                            }
-                            viewModel.resetGame()
-                        }, colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        )
-                    ) {
-                        Text("Exit")
-                    }
-                },
-                dismissButton = {
-                    Button(
-                        onClick = { showExitGameDialog = false },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.primary),
-                            contentColor = colorResource(id = R.color.on_primary)
-                        )
-                    ) {
-                        Text("Cancel")
-                    }
+    // Game End Dialog
+    if (balutState.isGameOver) {
+        GameEndDialog(
+            message = balutState.message,
+            onPlayAgain = { viewModel.resetGame() },
+            onExit = onBack
+        )
+    }
+
+    // Exit Game Dialog
+    if (showExitGameDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitGameDialog = false },
+            title = { Text("Exit Game") },
+            text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
+            confirmButton = {
+                TextButton(onClick = onBack) {
+                    Text("Exit")
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitGameDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun GameInfoCard(state: GameScoreState.BalutScoreState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = colorResource(id = R.color.surface_variant),
+            contentColor = colorResource(id = R.color.on_surface_variant)
+        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Round ${state.currentRound}/${state.maxRounds}",
+                style = MaterialTheme.typography.titleLarge
             )
+            Text(
+                text = "Rolls Left: ${state.rollsLeft}",
+                style = MaterialTheme.typography.titleMedium
+            )
+            if (state.message.isNotEmpty()) {
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalutCategoriesCard(
+    currentPlayerIndex: Int,
+    playerScores: Map<Int, Map<String, Int>>,
+    selectedCategory: String?,
+    onCategorySelect: (String) -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = colorResource(id = R.color.surface_variant)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Categories", style = MaterialTheme.typography.titleMedium)
+
+            // Numbers (Ones through Sixes)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    listOf(
+                        "Ones", "Twos", "Threes",
+                        "Fours", "Fives", "Sixes"
+                    )
+                ) { category ->
+                    playerScores[currentPlayerIndex]?.containsKey(category)?.let {
+                        FilterChip(
+                            selected = selectedCategory == category,
+                            onClick = { onCategorySelect(category) },
+                            enabled = !it && currentPlayerIndex == 0,
+                            label = { Text(category) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = colorResource(id = R.color.surface_variant),
+                                labelColor = colorResource(id = R.color.on_surface_variant),
+                                selectedContainerColor = colorResource(id = R.color.primary),
+                                selectedLabelColor = colorResource(id = R.color.on_primary)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Special Categories
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    listOf(
+                        "Straight", "Full House",
+                        "Four of a Kind", "Five of a Kind", "Choice"
+                    )
+                ) { category ->
+                    playerScores[currentPlayerIndex]?.containsKey(category)?.let {
+                        FilterChip(
+                            selected = selectedCategory == category,
+                            onClick = { onCategorySelect(category) },
+                            enabled = !it && currentPlayerIndex == 0,
+                            label = { Text(category) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = colorResource(id = R.color.surface_variant),
+                                labelColor = colorResource(id = R.color.on_surface_variant),
+                                selectedContainerColor = colorResource(id = R.color.primary),
+                                selectedLabelColor = colorResource(id = R.color.on_primary)
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }

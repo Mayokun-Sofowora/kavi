@@ -6,10 +6,12 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.*
@@ -19,14 +21,15 @@ import androidx.hilt.navigation.compose.*
 import androidx.navigation.NavController
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.R
-import com.mayor.kavi.data.games.BoardColors
+import com.mayor.kavi.util.BoardColors
 import com.mayor.kavi.data.manager.*
+import com.mayor.kavi.ui.Routes
 import kotlinx.coroutines.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: DiceViewModel = hiltViewModel(),
+    viewModel: GameViewModel = hiltViewModel(),
     navController: NavController
 ) {
     // Handle back button press
@@ -35,10 +38,10 @@ fun SettingsScreen(
     }
 
     val scope = rememberCoroutineScope()
-    val settingsManager = LocalSettingsManager.current
+    val settingsManager = SettingsManager.LocalSettingsManager.current
     val vibrationEnabled by settingsManager.getVibrationEnabled().collectAsState(initial = true)
     val shakeEnabled by settingsManager.getShakeEnabled().collectAsState(initial = false)
-    val soundEnabled by settingsManager.getSoundEnabled().collectAsState(initial = true)
+    val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
 
     LaunchedEffect(vibrationEnabled) {
         viewModel.setVibrationEnabled(vibrationEnabled)
@@ -60,7 +63,7 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = "Back"
                         )
                     }
@@ -107,20 +110,29 @@ fun SettingsScreen(
                             }
                         }
                     )
+                }
+            )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    // Sound Setting
-                    SettingsSwitch(
-                        title = "Sound Effects",
-                        description = "Play sounds during gameplay",
-                        checked = soundEnabled,
-                        onCheckedChange = {
-                            scope.launch {
-                                settingsManager.setSoundEnabled(it)
-                            }
+            // Game Rules Card
+            SettingsCard(
+                title = "Game Rules",
+                content = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Not sure what to play? check out the quick board rules",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Button(
+                            onClick = { navController.navigate(Routes.InstructionsShort.route + "/4") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colorResource(id = R.color.secondary)
+                            )
+                        ) {
+                            Text("Quick Board Rules")
                         }
-                    )
+                    }
                 }
             )
 
@@ -128,9 +140,6 @@ fun SettingsScreen(
             SettingsCard(
                 title = "Appearance",
                 content = {
-                    val boardColor by settingsManager.getBoardColor()
-                        .collectAsState(initial = "default")
-
                     Column {
                         Text(
                             "Background Color",

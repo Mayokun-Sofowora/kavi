@@ -8,30 +8,30 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.*
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.*
 import com.mayor.kavi.R
 import com.mayor.kavi.util.*
-import com.mayor.kavi.data.*
-import com.mayor.kavi.data.games.GameBoard
+import com.mayor.kavi.util.GameBoard
 import com.mayor.kavi.data.manager.*
+import com.mayor.kavi.data.models.*
 import com.mayor.kavi.ui.viewmodel.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -40,21 +40,27 @@ import timber.log.Timber
 @Composable
 fun StatisticsScreen(
     appViewModel: AppViewModel = hiltViewModel(),
-    diceViewModel: DiceViewModel = hiltViewModel(),
+    gameViewModel: GameViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val networkConnection = remember {
-        NetworkConnection(
-            context,
-            connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        )
-    }
+    val statisticsManager = StatisticsManager.LocalStatisticsManager.current
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val networkConnection = remember { NetworkConnection(connectivityManager) }
     val isConnected by networkConnection.asFlow().collectAsState(initial = false)
     val userProfileState by appViewModel.userProfileState.collectAsState()
-    val gameStats by diceViewModel.gameStats.collectAsState()
-    val playerAnalysis by diceViewModel.playerAnalysis.collectAsState()
-    val shakeRates by diceViewModel.shakeRates.collectAsState()
+    val gameStats by statisticsManager.gameStatistics.collectAsState()
+    val playerAnalysis by statisticsManager.playerAnalysis.collectAsState()
+
+    // Calculate overall win rate
+    val overallWinRate = gameStats?.winRates?.values?.let { winRates ->
+        if (winRates.isEmpty()) 0L else {
+            val totalWins = winRates.sumOf { it.wins }
+            val totalGames = winRates.sumOf { it.total }
+            if (totalGames > 0) (totalWins * 100L) / totalGames else 0L
+        }
+    } ?: 0L
 
     LaunchedEffect(Unit) {
         appViewModel.loadUserProfile()
@@ -66,7 +72,7 @@ fun StatisticsScreen(
                 title = { Text("Statistics") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.KeyboardArrowLeft, "Back")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -92,24 +98,25 @@ fun StatisticsScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                when (userProfileState) {
+                when (val state =
+                    userProfileState) { // smart casting; smartcast may have been useless
                     is Result.Success -> {
                         UserProfileCard(
-                            profile = (userProfileState as Result.Success<UserProfile>).data,
+                            profile = state.data,
                             onProfileChange = { appViewModel.updateUserProfile(it) }
                         )
                     }
 
                     is Result.Error -> {
                         ErrorContent(
-                            message = (userProfileState as Result.Error).message,
+                            message = state.message,
                             onRetry = { appViewModel.loadUserProfile() }
                         )
                     }
 
                     is Result.Loading -> {
                         // Use the preserved data during loading
-                        (userProfileState as Result.Loading<UserProfile>).data?.let { profile ->
+                        state.data?.let { profile ->
                             UserProfileCard(
                                 profile = profile,
                                 onProfileChange = { appViewModel.updateUserProfile(it) }
@@ -117,38 +124,46 @@ fun StatisticsScreen(
                         }
                         Timber.d("Loading user profile...")
                     }
+
+                    else -> Timber.d("Unknown statistics screen state: $state")
                 }
             }
 
-            if (userProfileState is Result.Success || userProfileState is Result.Loading) {
-                item { OverallStatsCard(gameStats) }
-                item { WinRateGraph(gameStats.winRates) }
-                item { ShakeRateAnalysis(shakeRates) }
-                item { GameStatsTable(gameStats) }
+            if (userProfileState is Result.Success) {
+                item { OverallStatsCard(gameStats!!, overallWinRate) }
+                item { PlayerAnalysisGraph(playerAnalysis) }
+                item { GameStatsTable(gameStats!!) }
                 item { PlayerAnalysisCard(playerAnalysis) }
-                item { ClearUserStatsButton(diceViewModel) }
+                item {
+                    ClearUserStatsButton {
+                        gameViewModel.viewModelScope.launch {
+                            // Reset profile to defaults
+                            val defaultProfile = (userProfileState as? Result.Success)?.data?.copy(
+                                name = "Player",
+                                avatar = Avatar.DEFAULT
+                            )
+                            defaultProfile?.let { profile ->
+                                appViewModel.updateUserProfile(profile)
+                                Toast.makeText(
+                                    context,
+                                    "Profile reset to defaults",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                }
+            } else if (userProfileState is Result.Loading) {
+                item { CircularProgressIndicator() }
             }
         }
     }
 }
 
 @Composable
-fun ClearUserStatsButton(diceViewModel: DiceViewModel) {
-    val context = LocalContext.current
+fun ClearUserStatsButton(onClick: () -> Unit) {
     Button(
-        onClick = {
-            diceViewModel.viewModelScope.launch {
-                val userId = diceViewModel.gameRepository.getCurrentUserId()
-                if (userId != null) {
-                    diceViewModel.statisticsManager.clearUserStats(userId)
-                    Toast.makeText(context, "User stats cleared", Toast.LENGTH_SHORT).show()
-
-                } else {
-                    Toast.makeText(context, "No user id", Toast.LENGTH_SHORT).show()
-
-                }
-            }
-        },
+        onClick = onClick,
         colors = ButtonDefaults.buttonColors(
             containerColor = colorResource(id = R.color.primary),
             contentColor = colorResource(id = R.color.buttonTextColor)
@@ -157,7 +172,7 @@ fun ClearUserStatsButton(diceViewModel: DiceViewModel) {
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        Text("Reset My Stats")
+        Text("Reset Profile")
     }
 }
 
@@ -183,21 +198,21 @@ private fun PlayerAnalysisCard(analysis: PlayerAnalysis?) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 StatCircle(
-                    value = (analysis?.predictedWinRate?.times(100)?.toInt() ?: 0),
+                    value = (analysis?.predictedWinRate?.times(100)?.toLong() ?: 0),
                     label = "Predicted\nWin Rate",
                     color = MaterialTheme.colorScheme.primary,
                     suffix = "%"
                 )
 
                 StatCircle(
-                    value = (analysis?.consistency?.times(100)?.toInt() ?: 0),
+                    value = (analysis?.consistency?.times(100)?.toLong() ?: 0),
                     label = "Consistency",
                     suffix = "%",
                     color = MaterialTheme.colorScheme.secondary
                 )
 
                 StatCircle(
-                    value = (analysis?.improvement?.times(100)?.toInt() ?: 0),
+                    value = (analysis?.improvement?.times(100)?.toLong() ?: 0),
                     label = "Improvement",
                     suffix = "%",
                     color = MaterialTheme.colorScheme.tertiary
@@ -210,168 +225,19 @@ private fun PlayerAnalysisCard(analysis: PlayerAnalysis?) {
             )
             {
                 Text(
-                    text = "Play Style: ${analysis?.playStyle}",
+                    text = "Play Style: ${analysis?.playStyle ?: "N/A"}",
                     style = MaterialTheme.typography.bodyLarge
                 )
-
             }
         }
     }
 }
 
 @Composable
-private fun ShakeRateAnalysis(shakeRates: List<Pair<Long, Int>>) {
-    val graphColor = colorResource(id = R.color.purple_700)
-    val gridColor = Color.Gray.copy(alpha = 0.2f)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .height(400.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Shake Rate Analysis", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                text = "Shows shake intensity over time (0-10 scale)",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
-            )
-
-            if (shakeRates.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No shake data available yet.\nPlay some games to see your shake patterns!",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
-                ) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        val xStep = size.width / 10
-                        val yStep = size.height / 10
-
-                        // Draw grid
-                        for (i in 0..10) {
-                            // Vertical lines
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(i * xStep, 0f),
-                                end = Offset(i * xStep, size.height),
-                                strokeWidth = 1.dp.toPx()
-                            )
-                            // Horizontal lines
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(0f, i * yStep),
-                                end = Offset(size.width, i * yStep),
-                                strokeWidth = 1.dp.toPx()
-                            )
-                        }
-
-                        if (shakeRates.size > 1) {
-                            val path = Path()
-                            val points = shakeRates.mapIndexed { index, (_, rate) ->
-                                Offset(
-                                    x = size.width * (index.toFloat() / (shakeRates.size - 1)),
-                                    y = size.height * (1 - rate.toFloat() / 10f) // Scale to 0-10
-                                )
-                            }
-
-                            // Draw line graph
-                            path.moveTo(points.first().x, points.first().y)
-                            for (i in 0 until points.size - 1) {
-                                val p1 = points[i]
-                                val p2 = points[i + 1]
-                                val controlPoint1 = Offset(
-                                    x = p1.x + (p2.x - p1.x) / 2f,
-                                    y = p1.y
-                                )
-                                val controlPoint2 = Offset(
-                                    x = p1.x + (p2.x - p1.x) / 2f,
-                                    y = p2.y
-                                )
-                                path.cubicTo(
-                                    controlPoint1.x, controlPoint1.y,
-                                    controlPoint2.x, controlPoint2.y,
-                                    p2.x, p2.y
-                                )
-                            }
-
-                            // Draw filled area under the graph
-                            val fillPath = Path().apply {
-                                addPath(path)
-                                lineTo(size.width, size.height)
-                                lineTo(0f, size.height)
-                                close()
-                            }
-                            drawPath(
-                                path = fillPath,
-                                color = graphColor.copy(alpha = 0.1f)
-                            )
-
-                            // Draw the line
-                            drawPath(
-                                path = path,
-                                color = graphColor,
-                                style = Stroke(
-                                    width = 2.dp.toPx(),
-                                    cap = StrokeCap.Round,
-                                    join = StrokeJoin.Round
-                                )
-                            )
-
-                            // Draw points
-                            points.forEach { point ->
-                                drawCircle(
-                                    color = graphColor,
-                                    radius = 4.dp.toPx(),
-                                    center = point
-                                )
-                            }
-                        }
-                    }
-
-                    // Y-axis labels
-                    Column(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .align(Alignment.CenterStart)
-                            .padding(end = 8.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        for (i in 10 downTo 0) {
-                            Text(
-                                text = "$i",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WinRateGraph(winRates: Map<String, Pair<Int, Int>>) {
-    val colorToUse = colorResource(id = R.color.blue)
-    val labelWidth = 15.dp // Space for percentage labels
+private fun PlayerAnalysisGraph(analysis: PlayerAnalysis?) {
+    val colorPrimary = colorResource(id = R.color.primary)
+    val colorSecondary = colorResource(id = R.color.secondary)
+    val colorTertiary = colorResource(id = R.color.tertiary)
 
     Card(
         modifier = Modifier
@@ -381,70 +247,147 @@ private fun WinRateGraph(winRates: Map<String, Pair<Int, Int>>) {
             .background(colorResource(id = R.color.surface))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Win Rate Analysis", style = MaterialTheme.typography.headlineMedium)
+            Text("Player Analysis Metrics", style = MaterialTheme.typography.headlineMedium)
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 8.dp, end = 8.dp, bottom = 24.dp)
+            ) {
                 Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 12.dp, end = 32.dp, top = 16.dp, bottom = 16.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    val barWidth =
-                        (size.width - labelWidth.toPx() - 32.dp.toPx()) / winRates.size
-                    val spacing = barWidth * 0.75f
-                    val startX =
-                        labelWidth.toPx() + 8.dp.toPx() // Add some padding after labels
+                    val width = size.width
+                    val height = size.height
+                    val padding = 40f
+                    val graphWidth = width - padding * 2
+                    val graphHeight = height - padding * 2
+
+                    // Draw axes
+                    drawLine(
+                        color = Color.Gray,
+                        start = Offset(padding, padding),
+                        end = Offset(padding, height - padding),
+                        strokeWidth = 2f
+                    )
+                    drawLine(
+                        color = Color.Gray,
+                        start = Offset(padding, height - padding),
+                        end = Offset(width - padding, height - padding),
+                        strokeWidth = 2f
+                    )
 
                     // Draw grid lines
-                    for (i in 0..10) {
-                        val y = size.height * (1 - i / 10f)
-                        val x = size.width + spacing
+                    for (i in 0..4) {
+                        val y = padding + (graphHeight * i / 4)
                         drawLine(
                             color = Color.Gray.copy(alpha = 0.3f),
-                            start = Offset(startX, y),
-                            end = Offset(x, y),
-                            strokeWidth = 1.dp.toPx()
+                            start = Offset(padding, y),
+                            end = Offset(width - padding, y),
+                            strokeWidth = 1f
                         )
                         // Draw percentage labels
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "${i * 10}%",
-                            2.dp.toPx(),
-                            y - 2.dp.toPx(),
-                            android.graphics.Paint().apply {
+                        drawIntoCanvas { canvas ->
+                            val paint = android.graphics.Paint().apply {
                                 color = android.graphics.Color.GRAY
                                 textSize = 12.sp.toPx()
-                                textAlign = android.graphics.Paint.Align.LEFT
+                                textAlign = android.graphics.Paint.Align.RIGHT
                             }
-                        )
+                            canvas.nativeCanvas.drawText(
+                                "${(100 - i * 25)}%",
+                                padding - 5f,
+                                y + 5f,
+                                paint
+                            )
+                        }
                     }
 
-                    // Draw bars
-                    winRates.entries.forEachIndexed { index, (game, stats) ->
-                        val winRate = if (stats.second > 0) {
-                            stats.first.toFloat() / stats.second
-                        } else 0f
-
-                        val barHeight = size.height * winRate
-                        val x = startX + index * barWidth + spacing
-
-                        // Draw bar
-                        drawRoundRect(
-                            color = colorToUse,
-                            topLeft = Offset(x, size.height - barHeight),
-                            size = Size(barWidth - spacing * 2, barHeight),
-                            cornerRadius = CornerRadius(4.dp.toPx())
+                    analysis?.let {
+                        val metrics = listOf(
+                            it.predictedWinRate to colorPrimary,
+                            it.consistency to colorSecondary,
+                            it.improvement to colorTertiary
                         )
 
-                        // Draw game name
-                        drawContext.canvas.nativeCanvas.drawText(
-                            game,
-                            x + (barWidth - spacing * 2) / 2,
-                            size.height + 16.dp.toPx(),
-                            android.graphics.Paint().apply {
-                                color = android.graphics.Color.BLACK
-                                textSize = 10.sp.toPx()
-                                textAlign = android.graphics.Paint.Align.CENTER
+                        // Draw metric lines and points
+                        metrics.forEachIndexed { index, (value, color) ->
+                            val x = padding + (graphWidth * (index + 1) / 4)
+                            val y = padding + graphHeight * (1 - value)
+
+                            // Draw vertical guide
+                            drawLine(
+                                color = color.copy(alpha = 0.2f),
+                                start = Offset(x, padding),
+                                end = Offset(x, height - padding),
+                                strokeWidth = 1f
+                            )
+
+                            // Draw point
+                            drawCircle(
+                                color = color,
+                                radius = 8f,
+                                center = Offset(x, y)
+                            )
+
+                            // Draw label
+                            drawIntoCanvas { canvas ->
+                                val paint = android.graphics.Paint().apply {
+                                    this.color = color.toArgb()
+                                    textSize = 10.sp.toPx()
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                }
+                                val label = when (index) {
+                                    0 -> "Win Rate"
+                                    1 -> "Consistency"
+                                    else -> "Improvement"
+                                }
+                                canvas.nativeCanvas.drawText(
+                                    label,
+                                    x,
+                                    height - padding / 3,
+                                    paint
+                                )
                             }
+                        }
+
+                        // Draw connecting lines between points
+                        val path = Path()
+                        metrics.forEachIndexed { index, (value, _) ->
+                            val x = padding + (graphWidth * (index + 1) / 4)
+                            val y = padding + graphHeight * (1 - value)
+                            if (index == 0) {
+                                path.moveTo(x, y)
+                            } else {
+                                path.lineTo(x, y)
+                            }
+                        }
+
+                        // Draw gradient under the line
+                        val gradientPath = Path().apply {
+                            addPath(path)
+                            lineTo(padding + (graphWidth * metrics.size / 4), height - padding)
+                            lineTo(padding + (graphWidth / 4), height - padding)
+                            close()
+                        }
+
+                        drawPath(
+                            path = gradientPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    colorPrimary.copy(alpha = 0.2f),
+                                    colorPrimary.copy(alpha = 0.0f)
+                                )
+                            )
+                        )
+
+                        // Draw the line connecting points
+                        drawPath(
+                            path = path,
+                            color = colorPrimary,
+                            style = Stroke(
+                                width = 2f,
+                                pathEffect = PathEffect.cornerPathEffect(10f)
+                            )
                         )
                     }
                 }
@@ -454,7 +397,7 @@ private fun WinRateGraph(winRates: Map<String, Pair<Int, Int>>) {
 }
 
 @Composable
-private fun GameStatsTable(gameStats: GameStats) {
+private fun GameStatsTable(gameStats: GameStatistics) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -473,19 +416,21 @@ private fun GameStatsTable(gameStats: GameStats) {
                 TableHeader("High Score")
             }
 
-            GameBoard.entries.forEach { board ->
-                val stats = gameStats.winRates[board.modeName]
-                val highScore = gameStats.highScores[board.modeName]
+            GameBoard.entries
+                .filter { it != GameBoard.CUSTOM }  // Filter out CUSTOM game mode
+                .forEach { board ->
+                    val stats = gameStats.winRates[board.modeName]
+                    val highScore = gameStats.highScores[board.modeName]
 
-                GameStatRow(
-                    gameName = board.modeName,
-                    gamesPlayed = stats?.second ?: 0,
-                    winRate = if (stats != null && stats.second > 0) {
-                        (stats.first.toFloat() / stats.second * 100).toInt()
-                    } else 0,
-                    highScore = highScore ?: 0
-                )
-            }
+                    GameStatRow(
+                        gameName = board.modeName,
+                        gamesPlayed = stats?.total ?: 0,
+                        winRate = if (stats != null && stats.total > 0) {
+                            ((stats.wins.toFloat() / stats.total.toFloat()) * 100).toInt()
+                        } else 0,
+                        highScore = highScore ?: 0
+                    )
+                }
         }
     }
 }
@@ -523,173 +468,77 @@ private fun UserProfileCard(
     profile: UserProfile,
     onProfileChange: (UserProfile) -> Unit
 ) {
-    var showGameSelector by remember { mutableStateOf(false) }
-    var showAvatarSelector by remember { mutableStateOf(false) }
-    var isEditingUsername by remember { mutableStateOf(false) }
-    var username by remember { mutableStateOf(profile.name) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
+    var editedUsername by remember { mutableStateOf(profile.name) }
+    var isEditing by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
+            Image(
+                painter = painterResource(id = profile.avatar.resourceId),
+                contentDescription = "Profile Avatar",
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(100.dp)
                     .clip(CircleShape)
-                    .clickable { showAvatarSelector = true }
-            ) {
-                Image(
-                    painter = painterResource(id = profile.avatar.resourceId),
-                    contentDescription = "Profile Avatar",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .clickable { showAvatarSelector = true }
-                )
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Change Avatar",
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.05f))
-                        .padding(2.dp)
-                )
-            }
+                    .clickable { showAvatarDialog = true }
+            )
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Column {
-                if (isEditingUsername) {
-                    TextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                isEditingUsername = false
-                                onProfileChange(profile.copy(name = username))
-                            }
-                        ),
-                        modifier = Modifier.focusRequester(remember { FocusRequester() }),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                isEditingUsername = false
-                                onProfileChange(profile.copy(name = username))
-                            }) {
-                                Icon(Icons.Default.Check, "Save")
-                            }
-                        }
-                    )
-                } else {
-                    Text(
-                        text = profile.name,
-                        modifier = Modifier.clickable { isEditingUsername = true },
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                }
-                Text(
-                    text = profile.email,
-                    style = MaterialTheme.typography.bodySmall
+            if (isEditing) {
+                OutlinedTextField(
+                    value = editedUsername,
+                    onValueChange = { editedUsername = it },
+                    label = { Text("Username") },
+                    singleLine = true,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Favorite Game:",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = profile.favoriteGames.firstOrNull()
-                            ?: "None",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.clickable { showGameSelector = true }
-                    )
+                    Button(onClick = {
+                        onProfileChange(profile.copy(name = editedUsername))
+                        isEditing = false
+                    }) {
+                        Text("Save")
+                    }
+                    Button(onClick = { isEditing = false }) {
+                        Text("Cancel")
+                    }
                 }
+            } else {
+                Text(
+                    text = profile.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .clickable { isEditing = true }
+                )
             }
         }
     }
 
-    if (showAvatarSelector) {
+    if (showAvatarDialog) {
         AvatarSelection(
             currentAvatar = profile.avatar,
             onAvatarSelected = {
                 onProfileChange(profile.copy(avatar = it))
-                showAvatarSelector = false
             },
-            onDismiss = { showAvatarSelector = false }
-        )
-    }
-
-    if (showGameSelector) {
-        GameSelector(
-            currentFavorite = profile.favoriteGames.firstOrNull(),
-            onGameSelected = { game ->
-                onProfileChange(profile.copy(favoriteGames = listOf(game)))
-                showGameSelector = false
-            },
-            onDismiss = { showGameSelector = false }
+            onDismiss = { showAvatarDialog = false }
         )
     }
 }
 
 @Composable
-private fun GameSelector(
-    currentFavorite: String?,
-    onGameSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Favorite Game") },
-        text = {
-            Column {
-                GameBoard.entries.forEach { board ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onGameSelected(board.modeName) }
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(board.modeName)
-                        if (board.modeName == currentFavorite) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Selected"
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-
-@Composable
-private fun OverallStatsCard(gameStats: GameStats) {
+private fun OverallStatsCard(gameStats: GameStatistics, overallWinRate: Long) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -710,20 +559,20 @@ private fun OverallStatsCard(gameStats: GameStats) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 StatCircle(
-                    value = gameStats.gamesPlayed,
+                    value = gameStats.gamesPlayed.toLong(),
                     label = "Games\nPlayed",
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 StatCircle(
-                    value = calculateWinRate(gameStats.winRates),
+                    value = overallWinRate,
                     label = "Win Rate",
                     suffix = "%",
                     color = MaterialTheme.colorScheme.secondary
                 )
 
                 StatCircle(
-                    value = gameStats.highScores.values.maxOrNull() ?: 0,
+                    value = (gameStats.highScores.values.maxOrNull() ?: 0).toLong(),
                     label = "Highest\nScore",
                     color = MaterialTheme.colorScheme.tertiary
                 )
@@ -734,7 +583,7 @@ private fun OverallStatsCard(gameStats: GameStats) {
 
 @Composable
 private fun StatCircle(
-    value: Int,
+    value: Long,
     label: String,
     suffix: String = "",
     color: Color
@@ -809,12 +658,4 @@ private fun AvatarSelection(
             }
         }
     )
-}
-
-private fun calculateWinRate(winRates: Map<String, Pair<Int, Int>>): Int {
-    val totalWins = winRates.values.sumOf { it.first }
-    val totalGames = winRates.values.sumOf { it.second }
-    return if (totalGames > 0) {
-        ((totalWins.toFloat() / totalGames.toFloat()) * 100).toInt()
-    } else 0
 }

@@ -86,7 +86,7 @@ fun SignUpScreen(
             onClick = {
                 signUpScope.launch {
                     appViewModel.updateLogin()
-                    viewModel.signUp(username, email, password, navController, appViewModel)
+                    viewModel.signUp(username, email, password, appViewModel)
                 }
             },
             colors = ButtonDefaults.buttonColors(

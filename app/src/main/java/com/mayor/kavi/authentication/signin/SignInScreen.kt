@@ -2,8 +2,7 @@ package com.mayor.kavi.authentication.signin
 
 import android.app.Activity
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -21,8 +20,7 @@ import com.google.firebase.auth.*
 import kotlinx.coroutines.launch
 import com.mayor.kavi.R
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import com.google.android.gms.common.api.ApiException
@@ -39,8 +37,18 @@ fun SignInScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    val signInScope = rememberCoroutineScope() // Coroutine scope for handling side effects
+    val signInScope = rememberCoroutineScope()
     val context = LocalContext.current
+//    val auth = FirebaseAuth.getInstance()
+
+//    // Check for existing session
+//    LaunchedEffect(Unit) {
+//        if (auth.currentUser != null) {
+//            navController.navigate(Routes.MainMenu.route) {
+//                popUpTo(Routes.SignIn.route) { inclusive = true }
+//            }
+//        }
+//    }
 
     BackHandler(enabled = true) {
         // Do nothing to prevent navigation to sign-in page

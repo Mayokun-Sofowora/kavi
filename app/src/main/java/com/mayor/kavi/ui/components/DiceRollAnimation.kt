@@ -21,9 +21,9 @@ fun DiceRollAnimation(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 500, easing = LinearEasing),
+            animation = tween(durationMillis = 500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
-        ), label = "dice rotation"
+        ),label = "dice rotation"
     )
 
     Image(
