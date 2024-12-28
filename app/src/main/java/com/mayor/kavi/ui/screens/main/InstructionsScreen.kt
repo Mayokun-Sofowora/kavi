@@ -17,13 +17,14 @@ import androidx.compose.ui.unit.*
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.colorResource
+import androidx.navigation.NavController
 import com.mayor.kavi.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstructionsScreen(
-    onClose: () -> Unit,
+    navController: NavController,
     startPage: Int = 0,
     showOnlyPage: Boolean = false
 ) {
@@ -45,7 +46,7 @@ fun InstructionsScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onClose) {
+                    IconButton(onClick = navController::navigateUp) {
                         Icon(
                             Icons.Filled.Close,
                             contentDescription = "Close Instructions",
@@ -84,41 +85,42 @@ fun InstructionsScreen(
                         },
                         description = when (startPage) {
                             4 -> "How to play the boards:\n" +
-                                "• Pig Dice Game: Roll a single die. If you roll a 1, you lose all points for the turn. " +
-                                "Otherwise, add the die's value to the turn score. Keep rolling to build your score or bank your points. " +
-                                "First player to reach 100 points wins." +
-                                "\n\n" +
-                                "• Greed (10,000): Score points by rolling combinations:\n" +
-                                "  - Single 1: 100 points\n" +
-                                "  - Single 5: 50 points\n" +
-                                "  - Three of a Kind: Number × 100 (e.g., three 2s = 200)\n" +
-                                "  - Three 1s: 1000 points\n" +
-                                "  - Four of a Kind: Three of a kind × 2\n" +
-                                "  - Five of a Kind: Four of a kind × 2\n" +
-                                "  - Six of a Kind: Five of a kind × 2\n" +
-                                "  - Straight (1-2-3-4-5-6): 1000 points\n" +
-                                "  - Three Pairs: 1000 points\n" +
-                                "First to 10,000 points wins." +
-                                "\n\n" +
-                                "• Balut Dice Game: Use five dice with these scoring categories:\n" +
-                                "  - Ones to Sixes: Sum of respective numbers\n" +
-                                "  - Full House: Sum of all dice (three of one number, two of another)\n" +
-                                "  - Four of a Kind: Sum of all five dice\n" +
-                                "  - Five of a Kind: Sum of all dice + 100 bonus\n" +
-                                "  - Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
-                                "  - Choice: Sum of all dice\n" +
-                                "You get 3 rolls per turn. After each roll, you can hold dice you want to keep. " +
-                                "Each category can only be used once. Highest total score wins." +
-                                "\n\n" +
-                                "• Custom Dice Game: A flexible board for any dice game:\n" +
-                                "  - Adjustable number of dice\n" +
-                                "  - Add/remove players\n" +
-                                "  - Custom player names\n" +
-                                "  - Score tracking with notes\n" +
-                                "  - View score history"
+                                    "• Pig Dice Game: Roll a single die. If you roll a 1, you lose all points for the turn. " +
+                                    "Otherwise, add the die's value to the turn score. Keep rolling to build your score or bank your points. " +
+                                    "First player to reach 100 points wins." +
+                                    "\n\n" +
+                                    "• Greed (10,000): Score points by rolling combinations:\n" +
+                                    "  - Single 1: 100 points\n" +
+                                    "  - Single 5: 50 points\n" +
+                                    "  - Three of a Kind: Number × 100 (e.g., three 2s = 200)\n" +
+                                    "  - Three 1s: 1000 points\n" +
+                                    "  - Four of a Kind: Three of a kind × 2\n" +
+                                    "  - Five of a Kind: Four of a kind × 2\n" +
+                                    "  - Six of a Kind: Five of a kind × 2\n" +
+                                    "  - Straight (1-2-3-4-5-6): 1000 points\n" +
+                                    "  - Three Pairs: 1000 points\n" +
+                                    "First to 10,000 points wins." +
+                                    "\n\n" +
+                                    "• Balut Dice Game: Use five dice with these scoring categories:\n" +
+                                    "  - Ones to Sixes: Sum of respective numbers\n" +
+                                    "  - Full House: Sum of all dice (three of one number, two of another)\n" +
+                                    "  - Four of a Kind: Sum of all five dice\n" +
+                                    "  - Five of a Kind: Sum of all dice + 100 bonus\n" +
+                                    "  - Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
+                                    "  - Choice: Sum of all dice\n" +
+                                    "You get 3 rolls per turn. After each roll, you can hold dice you want to keep. " +
+                                    "Each category can only be used once. Highest total score wins." +
+                                    "\n\n" +
+                                    "• Custom Dice Game: A flexible board for any dice game:\n" +
+                                    "  - Adjustable number of dice\n" +
+                                    "  - Add/remove players\n" +
+                                    "  - Custom player names\n" +
+                                    "  - Score tracking with notes\n" +
+                                    "  - View score history"
+
                             else -> "Kavi offers two exciting play modes:\n\n" +
-                                "• AR Mode: An immersive augmented reality experience where you interact with virtual dice in a dynamic environment.\n\n" +
-                                "• Classic Mode: A traditional board-style game focusing on pure strategic dice rolling and scoring."
+                                    "• AR Mode: An immersive augmented reality experience where you interact with virtual dice in a dynamic environment.\n\n" +
+                                    "• Classic Mode: A traditional board-style game focusing on pure strategic dice rolling and scoring."
                         },
                         imageRes = if (startPage == 1) R.drawable.instr_img1 else null
                     )

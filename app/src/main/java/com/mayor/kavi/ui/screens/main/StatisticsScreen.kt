@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.*
+import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.util.*
 import com.mayor.kavi.util.GameBoard
@@ -41,7 +42,7 @@ import timber.log.Timber
 fun StatisticsScreen(
     appViewModel: AppViewModel = hiltViewModel(),
     gameViewModel: GameViewModel = hiltViewModel(),
-    onBack: () -> Unit
+    navController: NavController,
 ) {
     val context = LocalContext.current
     val statisticsManager = StatisticsManager.LocalStatisticsManager.current
@@ -71,8 +72,12 @@ fun StatisticsScreen(
             CenterAlignedTopAppBar(
                 title = { Text("Statistics") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back")
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

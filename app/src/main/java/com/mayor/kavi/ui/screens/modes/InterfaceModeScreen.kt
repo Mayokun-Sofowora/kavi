@@ -1,9 +1,9 @@
 package com.mayor.kavi.ui.screens.modes
 
-import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -65,6 +65,15 @@ private fun TopBar(navController: NavController) {
                     .height(100.dp)
                     .padding(vertical = 2.dp)
             )
+        },
+        navigationIcon = {
+            IconButton(onClick = { navController.navigateUp() }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "Back",
+                    modifier = Modifier.size(32.dp)
+                )
+            }
         },
         actions = {
             IconButton(

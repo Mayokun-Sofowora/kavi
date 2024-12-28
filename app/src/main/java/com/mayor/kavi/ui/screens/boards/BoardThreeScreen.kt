@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,8 +30,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BoardThreeScreen(
     viewModel: GameViewModel = hiltViewModel(),
-    navController: NavController,
-    onBack: () -> Unit
+    navController: NavController
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
@@ -46,7 +46,7 @@ fun BoardThreeScreen(
     val balutState = (gameState as? GameScoreState.BalutScoreState) ?: run {
         LaunchedEffect(Unit) {
             showExitGameDialog = true
-            onBack()
+            navController.navigateUp()
         }
         return
     }
@@ -113,11 +113,15 @@ fun BoardThreeScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Balut Dice Game") },
-//                navigationIcon = {
-//                    IconButton(onClick = { showExitGameDialog = true }) {
-//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-//                    }
-//                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                },
                 actions = {
                     IconButton(
                         onClick = { navController.navigate(Routes.Settings.route) },
@@ -219,7 +223,7 @@ fun BoardThreeScreen(
         GameEndDialog(
             message = balutState.message,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = onBack
+            onExit = navController::navigateUp
         )
     }
 
@@ -230,7 +234,7 @@ fun BoardThreeScreen(
             title = { Text("Exit Game") },
             text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
             confirmButton = {
-                TextButton(onClick = onBack) {
+                TextButton(onClick = navController::navigateUp) {
                     Text("Exit")
                 }
             },

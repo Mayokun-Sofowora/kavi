@@ -3,7 +3,6 @@ package com.mayor.kavi.ui.screens.boards
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.focus.onFocusChanged
@@ -38,8 +38,7 @@ import com.mayor.kavi.util.BoardColors
 @Composable
 fun BoardFourScreen(
     viewModel: GameViewModel = hiltViewModel(),
-    navController: NavController,
-    onBack: () -> Unit
+    navController: NavController
 ) {
     val gameState = viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
@@ -69,7 +68,7 @@ fun BoardFourScreen(
 
     // Safe cast with early return if wrong game type
     val customState = (gameState.value as? GameScoreState.CustomScoreState) ?: run {
-        LaunchedEffect(Unit) { onBack() }
+        LaunchedEffect(Unit) { navController.navigateUp() }
         return
     }
 
@@ -77,11 +76,15 @@ fun BoardFourScreen(
         topBar = {
             TopAppBar(
                 title = { Text(customState.gameName.ifEmpty { "Custom Dice Board" }) },
-//                navigationIcon = {
-//                    IconButton(onClick = onBack) {
-//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-//                    }
-//                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)

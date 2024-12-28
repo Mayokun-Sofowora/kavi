@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,8 +34,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BoardTwoScreen(
     viewModel: GameViewModel = hiltViewModel(),
-    navController: NavController,
-    onBack: () -> Unit
+    navController: NavController
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
@@ -49,12 +49,12 @@ fun BoardTwoScreen(
     val greedState = (gameState as? GameScoreState.GreedScoreState) ?: run {
         LaunchedEffect(Unit) {
             showExitGameDialog = true
-            onBack()
+            navController.navigateUp()
         }
         return
     }
 
-    BackHandler{
+    BackHandler {
         showExitGameDialog = true
     }
     LaunchedEffect(Unit) {
@@ -65,12 +65,14 @@ fun BoardTwoScreen(
     // Handle AI turns
     LaunchedEffect(greedState.currentPlayerIndex, isRolling) {
         if (greedState.currentPlayerIndex == AI_PLAYER_ID.hashCode() && !greedState.isGameOver &&
-            !isRolling) {
+            !isRolling
+        ) {
             delay(500) // Short initial delay
 
             // Keep rolling until AI decides to bank or busts
             while (greedState.currentPlayerIndex == AI_PLAYER_ID.hashCode() &&
-                !greedState.isGameOver) {
+                !greedState.isGameOver
+            ) {
                 // Roll the dice
                 viewModel.rollDice()
                 delay(100) // Wait for roll animation and to show result
@@ -115,11 +117,15 @@ fun BoardTwoScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Greed Dice Game") },
-//                navigationIcon = {
-//                    IconButton(onClick = { showExitGameDialog = true }) {
-//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-//                    }
-//                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)
@@ -172,7 +178,8 @@ fun BoardTwoScreen(
                 heldDice = heldDice,
                 isMyTurn = greedState.currentPlayerIndex != AI_PLAYER_ID.hashCode(),
                 onDiceHold = if (greedState.currentPlayerIndex != AI_PLAYER_ID.hashCode()
-                    && !isRolling) { index ->
+                    && !isRolling
+                ) { index ->
                     viewModel.toggleDiceHold(index)
                 } else null,
                 diceSize = 120.dp,
@@ -247,10 +254,10 @@ fun BoardTwoScreen(
         GameEndDialog(
             message = greedState.message,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = onBack
+            onExit = navController::navigateUp
         )
     }
-    
+
     // Exit Game Dialog
     if (showExitGameDialog) {
         AlertDialog(
@@ -258,7 +265,7 @@ fun BoardTwoScreen(
             title = { Text("Exit Game") },
             text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
             confirmButton = {
-                TextButton(onClick = onBack) {
+                TextButton(onClick = navController::navigateUp) {
                     Text("Exit")
                 }
             },

@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
 import com.mayor.kavi.data.models.*
@@ -24,7 +26,7 @@ import timber.log.Timber
 @Composable
 fun MultiplayerBoardScreen(
     viewModel: GameViewModel,
-    onBack: () -> Unit
+    navController: NavController,
 ) {
     var showExitDialog by remember { mutableStateOf(false) }
     val navigationEvent by viewModel.navigationEvent.collectAsState(null)
@@ -41,7 +43,7 @@ fun MultiplayerBoardScreen(
     LaunchedEffect(navigationEvent) {
         when (navigationEvent) {
             is GameViewModel.NavigationEvent.NavigateBack -> {
-                onBack() // Navigate back to Lobby
+                navController.navigateUp() // Navigate back to Lobby
                 viewModel.resetGameSession() // Reset session information on exit
             }
 
@@ -51,7 +53,7 @@ fun MultiplayerBoardScreen(
     }
     if (sessionVal.players.isEmpty() || !sessionVal.players.any { it.id == viewModel.getCurrentUserId() }) {
         LaunchedEffect(Unit) {
-            onBack() // Trigger navigation back to Lobby if session or player not found
+            navController.navigateUp() // Trigger navigation back to Lobby if session or player not found
         }
         return
     }
@@ -85,7 +87,7 @@ fun MultiplayerBoardScreen(
     if (sessionVal.players.isEmpty() || sessionVal.players.none { it.id == viewModel.getCurrentUserId() }) {
         LaunchedEffect(Unit) {
             Timber.d("Session is null or user not found in session. Navigating back.")
-            onBack()
+            navController.navigateUp()
         }
         return
     }
@@ -107,11 +109,15 @@ fun MultiplayerBoardScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Greed Multiplayer") },
-//                navigationIcon = {
-//                    IconButton(onClick = { viewModel.onBackPressed() }) {
-//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-//                    }
-//                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)

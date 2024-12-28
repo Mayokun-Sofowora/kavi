@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -31,8 +32,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BoardOneScreen(
     viewModel: GameViewModel = hiltViewModel(),
-    navController: NavController,
-    onBack: () -> Unit
+    navController: NavController
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
@@ -47,7 +47,7 @@ fun BoardOneScreen(
     val pigState = (gameState as? GameScoreState.PigScoreState) ?: run {
         LaunchedEffect(Unit) {
             showExitGameDialog = true
-            onBack()
+            navController.navigateUp()
         }
         return
     }
@@ -99,11 +99,15 @@ fun BoardOneScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Pig Dice Game") },
-//                navigationIcon = {
-//                    IconButton(onClick = { showExitGameDialog = true }) {
-//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-//                    }
-//                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)
@@ -202,7 +206,7 @@ fun BoardOneScreen(
         GameEndDialog(
             message = pigState.message,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = onBack
+            onExit = navController::navigateUp
         )
     }
 
@@ -213,7 +217,7 @@ fun BoardOneScreen(
             title = { Text("Exit Game") },
             text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
             confirmButton = {
-                TextButton(onClick = onBack) {
+                TextButton(onClick = navController::navigateUp) {
                     Text("Exit")
                 }
             },

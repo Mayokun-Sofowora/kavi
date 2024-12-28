@@ -64,7 +64,8 @@ fun SettingsScreen(
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 },
