@@ -22,7 +22,8 @@ fun DiceDisplay(
     isMyTurn: Boolean = true,
     onDiceHold: ((Int) -> Unit)? = null,
     diceSize: Dp = 100.dp,
-    arrangement: DiceArrangement = DiceArrangement.GRID
+    arrangement: DiceArrangement = DiceArrangement.GRID,
+    modifier: Modifier? = Modifier
 ) {
     when (arrangement) {
         DiceArrangement.GRID -> DiceGrid(

@@ -1,8 +1,7 @@
 package com.mayor.kavi.ui.screens.boards
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -10,18 +9,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
 import com.mayor.kavi.data.models.*
 import com.mayor.kavi.ui.components.*
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.util.BoardColors
-import com.mayor.kavi.util.GameBoard
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +28,6 @@ fun MultiplayerBoardScreen(
 ) {
     var showExitDialog by remember { mutableStateOf(false) }
     val navigationEvent by viewModel.navigationEvent.collectAsState(null)
-    val session by viewModel.gameSession.collectAsState()
     val playerInfo by viewModel.playerInfo.collectAsState()
     val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
@@ -40,17 +36,28 @@ fun MultiplayerBoardScreen(
     val isMyTurn by viewModel.isMyTurn.collectAsState()
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
+    val sessionVal = viewModel.gameSession.collectAsState().value
 
     LaunchedEffect(navigationEvent) {
         when (navigationEvent) {
-            is GameViewModel.NavigationEvent.NavigateBack -> onBack()
+            is GameViewModel.NavigationEvent.NavigateBack -> {
+                onBack() // Navigate back to Lobby
+                viewModel.resetGameSession() // Reset session information on exit
+            }
+
             is GameViewModel.NavigationEvent.ShowExitDialog -> showExitDialog = true
             else -> {}
         }
     }
+    if (sessionVal.players.isEmpty() || !sessionVal.players.any { it.id == viewModel.getCurrentUserId() }) {
+        LaunchedEffect(Unit) {
+            onBack() // Trigger navigation back to Lobby if session or player not found
+        }
+        return
+    }
 
     BackHandler {
-        viewModel.onBackPressed()
+        showExitDialog = true
     }
 
     if (showExitDialog) {
@@ -61,7 +68,7 @@ fun MultiplayerBoardScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showExitDialog = false
-                    viewModel.endCurrentSession()
+                    viewModel.endGameSession()
                 }) {
                     Text("Yes")
                 }
@@ -75,18 +82,21 @@ fun MultiplayerBoardScreen(
     }
 
     // Check if session exists and player is part of it
-    if (session.players.isEmpty() || !session.players.any { it.id == viewModel.getCurrentUserId() }) {
+    if (sessionVal.players.isEmpty() || sessionVal.players.none { it.id == viewModel.getCurrentUserId() }) {
         LaunchedEffect(Unit) {
+            Timber.d("Session is null or user not found in session. Navigating back.")
             onBack()
         }
         return
     }
 
-    // Show waiting screen if game hasn't started or players aren't ready
-    if (session.gameState.status != "active" || !session.players.all { it.isReady }) {
+    // Show waiting screen if game hasn't started or we don't have both players
+    if (sessionVal.players.size < 2 || sessionVal.gameState.status != "active") {
         WaitingForPlayersScreen(
             players = playerInfo,
-            onReadyClick = { viewModel.setPlayerReady(session.id, true) },
+            onReadyClick = {
+                viewModel.startMultiplayerGame(sessionVal.id)
+            },
             currentUserId = viewModel.getCurrentUserId()
         )
         return
@@ -237,7 +247,7 @@ private fun WaitingForPlayersScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            "Waiting for Players",
+            if (players.size < 2) "Waiting for opponent..." else "Game ready to start!",
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -264,8 +274,8 @@ private fun WaitingForPlayersScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = if (player.isReady) "Ready" else "Not Ready",
-                        color = if (player.isReady) Color.Green else Color.Red,
+                        text = "Present",
+                        color = Color.Green,
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -274,16 +284,15 @@ private fun WaitingForPlayersScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
-            onClick = onReadyClick,
-            enabled = currentUserId?.let { uid ->
-                players.find { it.id == uid }?.let { !it.isReady }
-            } == true,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(id = R.color.primary)
-            )
-        ) {
-            Text("Ready")
+        if (players.size == 2) {
+            Button(
+                onClick = onReadyClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colorResource(id = R.color.primary)
+                )
+            ) {
+                Text("Start Game")
+            }
         }
     }
 }

@@ -15,6 +15,7 @@ import com.mayor.kavi.data.repository.*
 import com.mayor.kavi.util.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.*
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,8 +39,8 @@ class GameViewModel @Inject constructor(
 
     private val diceDataStore = DataStoreManager.getInstance(context)
     private val gameSessionMutex = Mutex()
-    private val gameStatisticsMutex = Mutex()
-    private val gameStateMutex = Mutex()
+//    private val gameStatisticsMutex = Mutex()
+//    private val gameStateMutex = Mutex()
 
     // Core States
     private val _gameState = MutableStateFlow<GameScoreState>(GameScoreState.PigScoreState())
@@ -66,7 +67,7 @@ class GameViewModel @Inject constructor(
     val gameSession: StateFlow<GameSession> = _gameSession.asStateFlow()
 
     // Statistics and Profile
-    private val _gameStatistics = MutableStateFlow(GameStatistics(0, emptyMap(), emptyMap()))
+//    private val _gameStatistics = MutableStateFlow(GameStatistics(0, emptyMap(), emptyMap()))
 
     // Game States
     private val _isMyTurn = MutableStateFlow(false)
@@ -78,7 +79,6 @@ class GameViewModel @Inject constructor(
     private val _onlinePlayers = MutableStateFlow<List<UserProfile>>(emptyList())
     val onlinePlayers: StateFlow<List<UserProfile>> = _onlinePlayers.asStateFlow()
     private val _isNetworkConnected = MutableStateFlow(false)
-    private val _isReady = MutableStateFlow(false)
     private val shakeFlow = MutableSharedFlow<Unit>()
 
     // Delegate to DiceManager
@@ -86,8 +86,10 @@ class GameViewModel @Inject constructor(
     val isRolling = diceManager.isRolling
     val heldDice = diceManager.heldDice
 
-    private val _challengeNotification = MutableStateFlow<GameSession?>(null)
-    val challengeNotification: StateFlow<GameSession?> = _challengeNotification.asStateFlow()
+    private val _challengeNotification =
+        MutableStateFlow<GameSession?>(null) // consider using challenge notification
+
+    private var onlinePlayersJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -153,10 +155,12 @@ class GameViewModel @Inject constructor(
                     )
                     navigateToBoard(session.id)
                 }
+
                 is Error -> {
                     Timber.e(result.exception, result.message)
                     _errorMessage.value = result.message
                 }
+
                 else -> {}
             }
             _isLoading.value = false
@@ -187,13 +191,50 @@ class GameViewModel @Inject constructor(
                         navigateToBoard(session.id)
                     }
                 }
+
                 is Error -> {
                     Timber.e(result.exception, result.message)
                     _errorMessage.value = result.message
                 }
+
                 else -> {}
             }
             _isLoading.value = false
+        }
+    }
+
+    fun endGameSession() {
+        viewModelScope.launch {
+            val sessionId = gameRepository.getSessionId()
+            if (sessionId != null) {
+                _isLoading.value = true
+                val result = gameRepository.endSession(sessionId)
+                when (result) {
+                    is Success -> {
+                        resetGame()
+                        _gameSession.value = GameSession()
+                        _navigationEvent.value = NavigationEvent.NavigateBack
+                        userRepository.setUserGameStatus(
+                            isInGame = false,
+                            isWaitingForPlayers = false,
+                            gameId = ""
+                        )
+                    }
+
+                    is Error -> {
+                        Timber.d(result.exception, result.message)
+                        _errorMessage.value = result.message
+                    }
+
+                    else -> {
+                        Timber.d("Unknown error occurred")
+                        _errorMessage.value = "Unknown error occurred"
+                    }
+                }
+                _isLoading.value = false
+            } else {
+                _errorMessage.value = "No Active Session Found!"
+            }
         }
     }
 
@@ -201,25 +242,6 @@ class GameViewModel @Inject constructor(
         viewModelScope.launch {
             gameRepository.getOnlinePlayers().collect { players ->
                 _onlinePlayers.value = players
-            }
-        }
-    }
-
-    fun setPlayerReady(sessionId: String, ready: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (val result = gameRepository.setPlayerReady(sessionId, ready)) {
-                is Success -> {
-                    _isReady.value = ready
-                    // If all players are ready, start the game
-                    val session = gameRepository.getGameSession(sessionId).dataOrNull
-                    if (session?.players?.all { it.isReady } == true) {
-                        setupMultiplayerSession()
-                    }
-                }
-                is Error -> {
-                    Timber.e(result.exception, "Failed to set player ready status")
-                }
-                else -> {}
             }
         }
     }
@@ -260,9 +282,31 @@ class GameViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                if (_playMode.value == PlayMode.Multiplayer) {
-//                    handleMultiplayerRoll(_gameState.value as GameScoreState.GreedScoreState)
+                if (_playMode.value == PlayMode.Multiplayer && _gameSession.value.id.isNotEmpty()) {
+                    val results = diceManager.rollDiceForBoard(_selectedBoard.value)
+                    // Update game session with roll results
+                    val sessionId = _gameSession.value.id
+                    val turnData = TurnData(
+                        playerID = getCurrentUserId() ?: "",
+                        diceRoll = results,
+                        heldDice = heldDice.value.toList()
+                    )
+                    val updates = mapOf(
+                        "gameState.turnData" to (_gameSession.value.gameState.turnData + turnData),
+                        "gameState.lastUpdate" to System.currentTimeMillis()
+                    )
+                    gameRepository.getGameSessionRef(sessionId)
+                        .update(updates)
+                        .await()
+
+                    // Process game state after rolling
+                    val newState = processGameState(results)
+                    _gameState.value = newState
                 } else {
+                    // Reset any lingering multiplayer session
+                    if (_gameSession.value.id.isNotEmpty()) {
+                        resetGameSession()
+                    }
                     val results = diceManager.rollDiceForBoard(_selectedBoard.value)
                     // Only provide haptic feedback if vibration is enabled
                     if (vibrationEnabled.value) {
@@ -303,36 +347,24 @@ class GameViewModel @Inject constructor(
             val currentState = _gameState.value as? GameScoreState.PigScoreState ?: return@launch
             val newState = pigGameManager.bankScore(currentState)
             _gameState.value = newState
-            diceManager.resetGame()
             if (newState.isGameOver) {
                 _showWinDialog.value = true
-                recordGameStatistics(newState)
+                val playerScore = newState.playerScores[0] ?: 0
+                val aiScore = newState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0
+                handleGameEnd(playerScore, playerScore > aiScore)
             }
         }
     }
 
     fun endGreedTurn() {
-        viewModelScope.launch {
-            val currentState = _gameState.value as? GameScoreState.GreedScoreState ?: return@launch
-            val updatedState = greedGameManager.bankScore(currentState)
-            _gameState.value = updatedState
-            if (_playMode.value == PlayMode.Multiplayer) {
-                val totalScore =
-                    updatedState.playerScores[userRepository.getCurrentUserId().hashCode()] ?: 0
-                gameSessionManager.handleGameAction(
-                    gameSession.value,
-                    GameSessionManager.GameAction.BankScore(
-                        totalScore = totalScore,
-                        GameBoard.GREED.modeName
-                    )
-                )
-            }
-            _heldDice.value = emptySet()
-            diceManager.resetGame()
-            if (updatedState.isGameOver) {
-                _showWinDialog.value = true
-                recordGameStatistics(updatedState)
-            }
+        val currentState = (_gameState.value as? GameScoreState.GreedScoreState) ?: return
+        val newState = greedGameManager.bankScore(currentState)
+        _gameState.value = newState
+        if (newState.isGameOver) {
+            _showWinDialog.value = true
+            val playerScore = newState.playerScores[0] ?: 0
+            val aiScore = newState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0
+            handleGameEnd(playerScore, playerScore > aiScore)
         }
     }
 
@@ -340,9 +372,10 @@ class GameViewModel @Inject constructor(
         val currentState = (_gameState.value as? GameScoreState.BalutScoreState) ?: return
         val dice = getCurrentRolls()
         val newState = balutGameManager.scoreCategory(currentState, dice, category)
-        
+
         _gameState.value = newState
         if (newState.isGameOver) {
+            _showWinDialog.value = true
             val playerScore = newState.playerScores[0]?.values?.sum() ?: 0
             val aiScore = newState.playerScores[AI_PLAYER_ID.hashCode()]?.values?.sum() ?: 0
             handleGameEnd(playerScore, playerScore > aiScore)
@@ -478,19 +511,18 @@ class GameViewModel @Inject constructor(
                             _gameSession.value = updatedSession
                             updatePlayerInfo(updatedSession)
                             setInitialTurn()
-                            
+
                             // Update game status when all players are ready
-                            if (updatedSession.gameState.status == "active" && 
-                                updatedSession.players.all { it.isReady }) {
+                            if (updatedSession.gameState.status == "active" &&
+                                updatedSession.players.all { it.isReady }
+                            ) {
                                 userRepository.setUserGameStatus(
                                     isInGame = true,
                                     isWaitingForPlayers = false,
                                     gameId = updatedSession.id
                                 )
                                 _gameState.value = sessionToGameScoreState(updatedSession)
-                                if (updatedSession.isGameStarted) {
-                                    navigateToBoard(updatedSession.id)
-                                }
+                                navigateToBoard(updatedSession.id)
                             }
                         }
                     }
@@ -508,10 +540,12 @@ class GameViewModel @Inject constructor(
                 playerCount = players.size
             )
 
-            GameBoard.GREED.modeName -> GameScoreState.GreedScoreState(
-                playerScores = scores,
-                playerCount = players.size
-            )
+            GameBoard.GREED.modeName ->
+                GameScoreState.GreedScoreState(
+                    playerScores = scores,
+                    playerCount = players.size
+                )
+
 
             GameBoard.BALUT.modeName -> {
                 val balutScores = players.associate { playerId ->
@@ -543,56 +577,6 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    private fun recordGameStatistics(finalState: GameScoreState) {
-        viewModelScope.launch {
-            gameStatisticsMutex.withLock {
-                val currentUserId = userRepository.getCurrentUserId() ?: return@launch
-                val (gameMode, finalScore, isWin) = when (finalState) {
-                    is GameScoreState.PigScoreState -> Triple(
-                        GameBoard.PIG.modeName,
-                        finalState.playerScores[currentUserId.hashCode()] ?: 0,
-                        (finalState.playerScores[currentUserId.hashCode()] ?: 0) >= 100
-                    )
-
-                    is GameScoreState.GreedScoreState -> Triple(
-                        GameBoard.GREED.modeName,
-                        finalState.playerScores[currentUserId.hashCode()] ?: 0,
-                        (finalState.playerScores[currentUserId.hashCode()] ?: 0) >= 10000
-                    )
-
-                    is GameScoreState.BalutScoreState -> Triple(
-                        GameBoard.BALUT.modeName,
-                        finalState.playerScores[currentUserId.hashCode()]?.values?.sum() ?: 0,
-                        (finalState.playerScores[currentUserId.hashCode()]?.values?.sum()
-                            ?: 0) >= 1000
-                    )
-
-                    is GameScoreState.CustomScoreState -> Triple(
-                        GameBoard.CUSTOM.modeName,
-                        finalState.playerScores[currentUserId.hashCode()] ?: 0,
-                        (finalState.playerScores[currentUserId.hashCode()] ?: 0) >= 2000
-                    )
-
-                    else -> return@launch
-                }
-                _gameStatistics.value = _gameStatistics.value.copy(
-                    gamesPlayed = _gameStatistics.value.gamesPlayed + 1,
-                    highScores = _gameStatistics.value.highScores + (gameMode to finalScore),
-                    winRates = _gameStatistics.value.winRates + (gameMode to WinRate(
-                        wins = if (isWin) 1 else 0,
-                        total = 1
-                    ))
-                )
-            }
-        }
-    }
-
-    private fun getCurrentTurnScore(state: GameScoreState) = when (state) {
-        is GameScoreState.PigScoreState -> state.currentTurnScore
-        is GameScoreState.GreedScoreState -> state.turnScore
-        else -> 0
-    }
-
     private fun provideHapticFeedback() {
         if (!_vibrationEnabled.value) return
 
@@ -607,79 +591,89 @@ class GameViewModel @Inject constructor(
         vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
-    private suspend fun handleMultiplayerState(results: List<Int>): GameScoreState {
-        return when (val session = _gameSession.value) {
-            GameSession() -> throw IllegalStateException("No active game session")
-            else -> {
-                val gameAction = GameSessionManager.GameAction.Roll(
-                    diceResults = results,
-                    heldDice = _heldDice.value,
-                    turnScore = getCurrentTurnScore(_gameState.value),
-                    gameMode = session.gameMode ?: GameBoard.GREED.modeName
-                )
-                gameSessionManager.handleGameAction(session, gameAction)
-                // Update game state based on session
-                sessionToGameScoreState(session)
-            }
-        }
-    }
-
     private suspend fun processGameState(results: List<Int>): GameScoreState {
-        return gameStateMutex.withLock {
-            when (val currentState = _gameState.value) {
-                is GameScoreState.PigScoreState -> withContext(Dispatchers.Default) {
-                    pigGameManager.handleTurn(currentState, results.first())
-                }
-
-                is GameScoreState.GreedScoreState -> {
-                    when (_playMode.value) {
-                        PlayMode.Multiplayer -> handleMultiplayerState(results)
-                        PlayMode.SinglePlayer -> greedGameManager.handleTurn(results, currentState)
-                    }
-                }
-
-                is GameScoreState.BalutScoreState -> withContext(Dispatchers.Default) {
-                    balutGameManager.handleTurn(results, currentState, _heldDice.value)
-                }
-
-                is GameScoreState.CustomScoreState -> withContext(Dispatchers.Default) {
-                    myGameManager.handleTurn(currentState, results)
-                }
-
-                else -> throw IllegalArgumentException("Unsupported Game State")
+        return when (val currentState = _gameState.value) {
+            is GameScoreState.PigScoreState -> withContext(Dispatchers.Default) {
+                pigGameManager.handleTurn(currentState, results.firstOrNull())
             }
+
+            is GameScoreState.GreedScoreState -> withContext(Dispatchers.Default) {
+                greedGameManager.handleTurn(results, currentState, _heldDice.value)
+            }
+
+            is GameScoreState.BalutScoreState -> withContext(Dispatchers.Default) {
+                balutGameManager.handleTurn(results, currentState, _heldDice.value)
+            }
+
+            is GameScoreState.CustomScoreState -> withContext(Dispatchers.Default) {
+                myGameManager.handleTurn(currentState, results)
+            }
+
+            else -> throw IllegalArgumentException("Unsupported Game State")
         }
     }
 
     private suspend fun handleGameSessionUpdate(session: GameSession) {
         gameSessionMutex.withLock {
-            val gameState = try {
-                sessionToGameScoreState(session)
+            try {
+                // Update game state
+                val gameState = when (session.gameMode) {
+                    GameBoard.GREED.modeName -> {
+                        // Get the last roll from the most recent turn data
+                        val lastRoll =
+                            session.gameState.turnData.lastOrNull()?.diceRoll ?: emptyList()
+
+                        GameScoreState.GreedScoreState(
+                            playerScores = session.gameState.scores.mapKeys { it.key.hashCode() },
+                            currentPlayerIndex = session.gameState.currentPlayerId.hashCode(),
+                            turnScore = 0,
+                            message = "",
+                            lastRoll = lastRoll,
+                            isGameOver = session.gameState.status == "completed"
+                        )
+                    }
+
+                    else -> throw IllegalArgumentException("Unsupported game mode: ${session.gameMode}")
+                }
+                _gameState.value = gameState
+
+                // Update player info
+                updatePlayerInfo(session)
+
+                // Update turn status
+                _isMyTurn.value = session.gameState.currentPlayerId == getCurrentUserId()
+
+                // Handle game completion
+                if (session.gameState.status == "completed") {
+                    _showWinDialog.value = true
+                    val playerScore = session.gameState.scores[getCurrentUserId()] ?: 0
+                    val isWinner = session.gameState.scores.all { (id, score) ->
+                        id == getCurrentUserId() || score <= playerScore
+                    }
+                    handleGameEnd(playerScore, isWinner)
+                }
             } catch (e: Exception) {
-                Timber.e("Error handling game session state. Defaulting state to Pig State: ${e.message}")
-                GameScoreState.PigScoreState()
-            }
-            _gameState.value = gameState
-            if (session.gameState.status == "completed") {
-                _showWinDialog.value = true
-                recordGameStatistics(gameState)
+                Timber.e(e, "Error handling game session update")
+                _errorMessage.value = "Error updating game state: ${e.message}"
             }
         }
     }
 
     private suspend fun updatePlayerInfo(session: GameSession) {
-        val players = session.players
-        if (players.isEmpty()) return
-
-        _playerInfo.value = players.map { player ->
-            PlayerInfoData(
-                id = player.id,
-                name = player.name.ifEmpty { "Player ${player.id.take(4)}" },
+        val players = session.players.map { player ->
+            val userProfile = userRepository.getUserById(player.id).dataOrNull
+            userProfile?.toPlayerInfoData(
                 score = session.scores[player.id] ?: 0,
-                isCurrentTurn = session.currentTurn == player.id,
+                isCurrentTurn = session.gameState.currentPlayerId == player.id
+            ) ?: PlayerInfoData(
+                id = player.id,
+                name = userProfile?.name ?: "Unknown Player",
+                score = session.scores[player.id] ?: 0,
+                isCurrentTurn = session.gameState.currentPlayerId == player.id,
                 isReady = player.isReady
             )
         }
+        _playerInfo.value = players
     }
 
     val isRollAllowed: StateFlow<Boolean> = combine(
@@ -697,6 +691,15 @@ class GameViewModel @Inject constructor(
         true
     )
 
+    fun UserProfile.toPlayerInfoData(score: Int = 0, isCurrentTurn: Boolean = false) =
+        PlayerInfoData(
+            id = id,
+            name = name,
+            score = score,
+            isCurrentTurn = isCurrentTurn,
+            isReady = isWaitingForPlayers
+        )
+
     fun chooseAICategory(diceResults: List<Int>): String {
         val currentState = (_gameState.value as? GameScoreState.BalutScoreState) ?: return "Choice"
         return balutGameManager.chooseAICategory(diceResults, currentState)
@@ -704,17 +707,6 @@ class GameViewModel @Inject constructor(
 
     fun getCurrentRolls(): List<Int> {
         return diceManager.currentRolls.value
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        viewModelScope.launch(Dispatchers.IO) {
-            setUserOnlineStatus(false)
-        }
-        shakeDetectionManager.clearOnShakeListener()
-        networkConnection.removeObserver { isConnected ->
-            _isNetworkConnected.value = isConnected
-        }
     }
 
     private fun updateGameStatistics(score: Int, isWin: Boolean) {
@@ -730,7 +722,6 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    // Update this in your game end handlers
     private fun handleGameEnd(finalScore: Int, isWin: Boolean) {
         updateGameStatistics(finalScore, isWin)
     }
@@ -742,7 +733,8 @@ class GameViewModel @Inject constructor(
     }
 
     fun startListeningForOnlinePlayers() {
-        viewModelScope.launch {
+        onlinePlayersJob?.cancel() // Cancel any existing job
+        onlinePlayersJob = viewModelScope.launch {
             userRepository.listenForOnlinePlayers()
                 .collect { players ->
                     _onlinePlayers.value = players.filter { it.id != getCurrentUserId() }
@@ -751,41 +743,75 @@ class GameViewModel @Inject constructor(
     }
 
     fun stopListeningForOnlinePlayers() {
+        onlinePlayersJob?.cancel()
+        onlinePlayersJob = null
         _onlinePlayers.value = emptyList()
     }
 
-    fun acceptChallenge(session: GameSession) {
-        viewModelScope.launch {
-            joinGameSession(session.id)
-            _challengeNotification.value = null
-        }
-    }
-
-    fun declineChallenge(session: GameSession) {
-        _challengeNotification.value = null
-    }
-
-    fun endCurrentSession() {
+    fun resetGameSession() {
         viewModelScope.launch {
             val currentSession = _gameSession.value
             if (currentSession.id.isNotEmpty()) {
-                gameRepository.cleanupGameSession(currentSession.id)
-                userRepository.setUserGameStatus(
-                    isInGame = false,
-                    isWaitingForPlayers = false,
-                    gameId = ""
-                )
-                _gameSession.value = GameSession()
-                _navigationEvent.value = NavigationEvent.NavigateBack
+                try {
+                    // Update user status
+                    userRepository.setUserGameStatus(
+                        isInGame = false,
+                        isWaitingForPlayers = false,
+                        gameId = ""
+                    )
+                    // Reset session state
+                    _gameSession.value = GameSession()
+                    _playerInfo.value = emptyList()
+                    _isMyTurn.value = false
+                    // Reset game mode if needed
+                    if (_playMode.value == PlayMode.Multiplayer) {
+                        _playMode.value = PlayMode.SinglePlayer
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to reset game session")
+                }
             }
         }
     }
 
     fun onBackPressed() {
-        if (_gameSession.value.id.isNotEmpty()) {
-            _navigationEvent.value = NavigationEvent.ShowExitDialog
+        _navigationEvent.value = null // Clear previous event
+        _navigationEvent.value = if (_gameSession.value.id.isNotEmpty()) {
+            NavigationEvent.ShowExitDialog
         } else {
-            _navigationEvent.value = NavigationEvent.NavigateBack
+            NavigationEvent.NavigateBack
+        }
+    }
+
+    fun startMultiplayerGame(sessionId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Update game state to active
+                val updates = mapOf(
+                    "gameState.status" to "active",
+                    "isGameStarted" to true
+                )
+
+                gameRepository.getGameSessionRef(sessionId)
+                    .update(updates)
+                    .await()
+
+                // Update user status
+                userRepository.setUserGameStatus(
+                    isInGame = true,
+                    isWaitingForPlayers = false,
+                    gameId = sessionId
+                )
+
+                // Navigate to game board
+                navigateToBoard(sessionId)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start multiplayer game")
+                _errorMessage.value = "Failed to start game: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 

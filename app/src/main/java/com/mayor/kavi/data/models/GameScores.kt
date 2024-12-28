@@ -25,6 +25,7 @@ sealed class GameScoreState {
         val heldDice: Set<Int> = emptySet(),
         val scoringDice: Set<Int> = emptySet(),
         val canReroll: Boolean = true,
+        val lastRoll: List<Int> = emptyList(),
         val roundHistory: Map<Int, List<Int>> = emptyMap(),
         override val currentPlayerIndex: Int = 0,
         override val playerCount: Int = 2,

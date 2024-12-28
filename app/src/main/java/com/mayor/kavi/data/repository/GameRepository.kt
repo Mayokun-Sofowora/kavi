@@ -1,5 +1,6 @@
 package com.mayor.kavi.data.repository
 
+import com.google.firebase.firestore.DocumentReference
 import com.mayor.kavi.data.models.GameSession
 import com.mayor.kavi.data.models.GameState
 import com.mayor.kavi.data.models.UserProfile
@@ -14,6 +15,8 @@ interface GameRepository {
     suspend fun createGameSession(opponent: String): Result<GameSession>
     suspend fun setPlayerReady(sessionId: String, isReady: Boolean): Result<Unit>
     suspend fun joinGameSession(sessionId: String): Result<GameSession>
+    suspend fun endSession(sessionId: String): Result<Unit>
+    fun getGameSessionRef(sessionId: String): DocumentReference
     suspend fun cleanupGameSession(sessionId: String): Result<Unit>
     suspend fun getGameSession(sessionId: String): Result<GameSession>
     suspend fun updateGameState(sessionId: String, state: GameState): Result<Unit>

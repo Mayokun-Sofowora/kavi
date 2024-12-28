@@ -98,7 +98,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideGreedGameManager(
-        statisticsManager: StatisticsManager
+        statisticsManager: StatisticsManager,
+        diceManager: DiceManager
     ): GreedGameManager =
         GreedGameManager(statisticsManager = statisticsManager)
 

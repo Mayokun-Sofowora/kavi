@@ -43,7 +43,6 @@ class SignInViewModel @Inject constructor(
                     navController.navigate(Routes.MainMenu.route)
                     SignInState(isLoading = false, toastMessage = "Sign in successful")
                 }
-
                 is Loading -> SignInState(isLoading = true)
                 is Error -> {
                     appViewModel.onLoginCancel()
@@ -69,9 +68,7 @@ class SignInViewModel @Inject constructor(
                         isAuthSuccess = result.data,
                         toastMessage = "Google sign-in successful"
                     )
-
                     appViewModel.onLoginComplete()
-
                 }
 
                 is Loading -> {

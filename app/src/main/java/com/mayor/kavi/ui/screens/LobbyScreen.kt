@@ -29,6 +29,8 @@ import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.ui.viewmodel.GameViewModel.NavigationEvent
 import com.mayor.kavi.util.*
+import kotlinx.coroutines.launch
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,39 +44,59 @@ fun LobbyScreen(
     val onlinePlayers by gameViewModel.onlinePlayers.collectAsState()
     val navigationEvent by gameViewModel.navigationEvent.collectAsState(initial = null)
     LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Set online status when entering/leaving lobby
     LaunchedEffect(Unit) {
-        gameViewModel.setUserOnlineStatus(true)
-        gameViewModel.startListeningForOnlinePlayers()
+        launch {
+            gameViewModel.setUserOnlineStatus(true)
+        }
+        launch {
+            gameViewModel.startListeningForOnlinePlayers()
+        }
+    }
+
+    LaunchedEffect(navigationEvent) {
+        Timber.d("NavigationEvent: $navigationEvent")
+        when (navigationEvent) {
+            is NavigationEvent.NavigateToBoard -> {
+                val sessionId = (navigationEvent as NavigationEvent.NavigateToBoard).sessionId
+                Timber.d("SessionId: $sessionId, PlayMode: ${gameViewModel.playMode.value}, " +
+                        "Board: ${gameViewModel.selectedBoard.value}")
+                if (gameViewModel.playMode.value == PlayMode.Multiplayer &&
+                    gameViewModel.selectedBoard.value == GameBoard.GREED.modeName
+                ) {
+                    navController.navigate(Routes.MultiplayerBoard.route + "/${sessionId}") {
+                        launchSingleTop = true
+                    }
+                }
+            }
+
+            is NavigationEvent.NavigateBack -> {
+                gameViewModel.resetGameSession()
+                gameViewModel.stopListeningForOnlinePlayers()
+                navController.navigate(Routes.Boards.route) {
+                    popUpTo(Routes.Lobby.route) { inclusive = true }
+                }
+            }
+
+            else -> {}
+        }
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            gameViewModel.setUserOnlineStatus(false)
-            gameViewModel.stopListeningForOnlinePlayers()
+            scope.launch {
+                gameViewModel.setUserOnlineStatus(false)
+                gameViewModel.stopListeningForOnlinePlayers()
+            }
         }
     }
 
     BackHandler {
-        navController.popBackStack()
-    }
-
-    LaunchedEffect(navigationEvent) {
-        if (navigationEvent is NavigationEvent.NavigateToBoard) {
-            val sessionId = (navigationEvent as NavigationEvent.NavigateToBoard).sessionId
-            if (gameViewModel.playMode.value == PlayMode.Multiplayer &&
-                gameViewModel.selectedBoard.value == GameBoard.GREED.modeName &&
-                gameViewModel.gameSession.value.id.isNotEmpty()
-            ) {
-                navController.navigate(Routes.MultiplayerBoard.route + "/${sessionId}") {
-                    launchSingleTop = true
-                    popUpTo(Routes.Lobby.route) { inclusive = true }
-                }
-            }
-        } else if (navigationEvent is NavigationEvent.NavigateBack) {
-            navController.popBackStack()
-        } else if (navigationEvent is NavigationEvent.ShowExitDialog) {
+        scope.launch {
+            gameViewModel.resetGameSession()
+            gameViewModel.stopListeningForOnlinePlayers()
             navController.popBackStack()
         }
     }
@@ -240,16 +262,19 @@ fun OnlinePlayersList(
 ) {
     val surfaceVariantColor = colorResource(id = R.color.surface_variant)
     val primaryColor = colorResource(id = R.color.primary)
+    val onlinePlayers = remember(players, currentUserId) {
+        players.filter { it.id != currentUserId }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(
-            count = players.size,
-            key = { players[it].id }
+            count = onlinePlayers.size,
+            key = { onlinePlayers[it].id }
         ) { index ->
-            val player = players[index]
+            val player = onlinePlayers[index]
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = surfaceVariantColor)

@@ -1,5 +1,6 @@
 package com.mayor.kavi.ui.screens.boards
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -48,6 +49,10 @@ fun BoardThreeScreen(
             onBack()
         }
         return
+    }
+
+    BackHandler {
+        showExitGameDialog = true
     }
 
     LaunchedEffect(Unit) {

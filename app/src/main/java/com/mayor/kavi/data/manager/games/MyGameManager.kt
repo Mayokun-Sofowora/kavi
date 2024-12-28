@@ -8,7 +8,7 @@ class MyGameManager @Inject constructor(
 ) {
     companion object {
         const val MAX_DICE = 6  // Maximum number of dice that can be rolled
-        const val DEFAULT_DICE = 2  // Default number of dice for a new game
+        const val DEFAULT_DICE = 6  // Default number of dice for a new game
         const val MIN_PLAYERS = 2  // Minimum number of players
         const val MAX_PLAYERS = 6  // Maximum number of players
     }
@@ -49,7 +49,8 @@ class MyGameManager @Inject constructor(
         val newPlayerIndex = currentState.playerCount
         val updatedScores = currentState.playerScores + (newPlayerIndex to 0)
         val updatedHistory = currentState.scoreHistory + (newPlayerIndex to emptyList())
-        val updatedNames = currentState.playerNames + (newPlayerIndex to "Player ${newPlayerIndex + 1}")
+        val updatedNames =
+            currentState.playerNames + (newPlayerIndex to "Player ${newPlayerIndex + 1}")
 
         return currentState.copy(
             playerScores = updatedScores,
@@ -60,7 +61,11 @@ class MyGameManager @Inject constructor(
         )
     }
 
-    fun updatePlayerName(currentState: CustomScoreState, playerIndex: Int, name: String): CustomScoreState {
+    fun updatePlayerName(
+        currentState: CustomScoreState,
+        playerIndex: Int,
+        name: String
+    ): CustomScoreState {
         if (playerIndex >= currentState.playerCount) {
             return currentState.copy(message = "Invalid player index")
         }
@@ -75,11 +80,12 @@ class MyGameManager @Inject constructor(
     fun addScore(currentState: CustomScoreState, playerIndex: Int, score: Int): CustomScoreState {
         val currentScore = currentState.playerScores[playerIndex] ?: 0
         val updatedScores = currentState.playerScores + (playerIndex to currentScore + score)
-        
+
         // Add score to history
         val playerHistory = currentState.scoreHistory[playerIndex] ?: emptyList()
-        val updatedHistory = currentState.scoreHistory + (playerIndex to playerHistory + "Score: $score")
-        
+        val updatedHistory =
+            currentState.scoreHistory + (playerIndex to playerHistory + "Score: $score")
+
         return currentState.copy(
             playerScores = updatedScores,
             scoreHistory = updatedHistory,
@@ -112,10 +118,8 @@ class MyGameManager @Inject constructor(
     }
 
     fun resetScores(currentState: CustomScoreState): CustomScoreState {
-        return currentState.copy(
-            playerScores = currentState.playerNames.keys.associateWith { 0 },
-            scoreHistory = currentState.playerNames.keys.associateWith { emptyList() },
-            message = "Scores reset!"
+        return initializeGame(currentState.gameId).copy(
+            message = "Reset board!"
         )
     }
 

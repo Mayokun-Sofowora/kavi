@@ -37,10 +37,10 @@ class StatisticsManager @Inject constructor(
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "statistics")
     private val dataStore = context.dataStore
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
-    
+
     private val _playerAnalysis = MutableStateFlow<PlayerAnalysis?>(null)
     val playerAnalysis: StateFlow<PlayerAnalysis?> = _playerAnalysis.asStateFlow()
-    
+
     private val _gameStatistics = MutableStateFlow<GameStatistics?>(null)
     val gameStatistics: StateFlow<GameStatistics?> = _gameStatistics.asStateFlow()
 
@@ -81,9 +81,11 @@ class StatisticsManager @Inject constructor(
                     Timber.d("Successfully updated game statistics")
                     updatePlayerAnalysis() // Update analysis after statistics change
                 }
+
                 is Result.Error -> {
                     Timber.e(result.exception, "Failed to update game statistics")
                 }
+
                 else -> {}
             }
         }
@@ -93,13 +95,13 @@ class StatisticsManager @Inject constructor(
         try {
             // First try to load from local DataStore
             loadGameStatisticsFromDataStore()
-            
+
             // Then fetch from Firestore
             when (val result = statisticsRepository.getGameStatistics()) {
                 is Result.Success -> {
                     val remoteStats = result.data
                     val localStats = _gameStatistics.value
-                    
+
                     // Merge remote and local stats by taking the maximum values
                     val mergedStats = if (localStats != null) {
                         GameStatistics(
@@ -125,7 +127,7 @@ class StatisticsManager @Inject constructor(
                     } else {
                         remoteStats
                     }
-                    
+
                     // Update both local and remote with merged data
                     _gameStatistics.value = mergedStats
                     saveGameStatisticsToDataStore(mergedStats)
@@ -134,9 +136,11 @@ class StatisticsManager @Inject constructor(
                         statisticsRepository.updateGameStatistics(mergedStats)
                     }
                 }
+
                 is Result.Error -> {
                     Timber.e(result.exception, "Error loading remote game statistics")
                 }
+
                 else -> {}
             }
         } catch (e: Exception) {
@@ -147,14 +151,14 @@ class StatisticsManager @Inject constructor(
     private fun shouldUpdateRemote(local: GameStatistics, remote: GameStatistics): Boolean {
         // Check if local has any higher values that need to be synced to remote
         if (local.gamesPlayed > remote.gamesPlayed) return true
-        
+
         // Check high scores
         for (gameMode in local.highScores.keys) {
             if ((local.highScores[gameMode] ?: 0) > (remote.highScores[gameMode] ?: 0)) {
                 return true
             }
         }
-        
+
         // Check win rates
         for (gameMode in local.winRates.keys) {
             val localWinRate = local.winRates[gameMode] ?: WinRate()
@@ -163,7 +167,7 @@ class StatisticsManager @Inject constructor(
                 return true
             }
         }
-        
+
         return false
     }
 
@@ -221,8 +225,8 @@ class StatisticsManager @Inject constructor(
     }
 
     private fun calculateConsistency(stats: GameStatistics): Float {
-        val winRates = stats.winRates.values.map { 
-            if (it.total > 0) it.wins.toFloat() / it.total else 0f 
+        val winRates = stats.winRates.values.map {
+            if (it.total > 0) it.wins.toFloat() / it.total else 0f
         }
         return if (winRates.isNotEmpty()) {
             val mean = winRates.average()
@@ -233,29 +237,49 @@ class StatisticsManager @Inject constructor(
 
     private fun determinePlayStyle(stats: GameStatistics): PlayStyle {
         val riskLevel = calculateRiskLevel(stats)
+        // Thresholds fine-tuned based on observation and experience
         return when {
-            riskLevel > 0.7f -> PlayStyle.AGGRESSIVE
-            riskLevel < 0.3f -> PlayStyle.CAUTIOUS
+            riskLevel > 0.6f -> PlayStyle.AGGRESSIVE
+            riskLevel < 0.4f -> PlayStyle.CAUTIOUS
             else -> PlayStyle.BALANCED
         }
     }
 
     private fun calculateRiskLevel(stats: GameStatistics): Float {
+        // Calculate risk based on win rate and consistency
         val winRate = calculateWinRate(stats)
         val consistency = calculateConsistency(stats)
         return (winRate + (1 - consistency)) / 2
     }
 
     private fun calculateImprovement(stats: GameStatistics): Float {
-        // Calculate improvement based on recent game performance
         val totalGames = stats.winRates.values.sumOf { it.total }
-        val totalWins = stats.winRates.values.sumOf { it.wins }
-        
-        return if (totalGames >= 5) {
-            val recentWinRate = totalWins.toFloat() / totalGames
-            val overallWinRate = calculateWinRate(stats)
-            (recentWinRate - overallWinRate).coerceIn(0f, 1f)
-        } else 0f
+        if (totalGames < 5) return 0f // Cannot determine improvement with less than 5 games
+
+        val gameModes = stats.winRates.keys
+
+        // Calculate win rate for each game mode
+        gameModes.associateWith { gameMode ->
+            val winRate = stats.winRates[gameMode] ?: WinRate()
+            if (winRate.total > 0) winRate.wins.toFloat() / winRate.total else 0f
+        }
+
+        val recentGames = stats.winRates.values.sumOf { it.total }
+        val recentWins = stats.winRates.values.sumOf { it.wins }
+
+        val recentWinRate = if (recentGames > 0) {
+            recentWins.toFloat() / recentGames
+        } else {
+            0f
+        }
+        // Compare recent performance against long-term performance
+        var overallWinRate = calculateWinRate(stats)
+
+        // Give some benefit to those who have had a loss before improving
+        if (recentWinRate < overallWinRate) {
+            overallWinRate -= 0.1f;
+        }
+        return (recentWinRate - overallWinRate).coerceIn(0f, 1f)
     }
 
     // AI decision making for Pig game
@@ -287,13 +311,14 @@ class StatisticsManager @Inject constructor(
                 PlayStyle.CAUTIOUS -> +3
                 else -> +5
             }
+
             playerTotalScore > aiTotalScore + 20 -> if (playerWinRate > 0.5f) -10 else -7
             else -> 0
         }
 
         val finalMinScore = (baseMinScore + situationalAdjustment).coerceIn(12, 28)
         val randomRange = if (playerConsistency > 0.7f) (-1..1) else (-2..2)
-        
+
         return currentTurnScore >= finalMinScore + randomRange.random()
     }
 }

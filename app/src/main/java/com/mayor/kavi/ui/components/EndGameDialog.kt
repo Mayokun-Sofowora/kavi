@@ -12,11 +12,11 @@ fun GameEndDialog(
     onPlayAgain: () -> Unit,
     onExit: () -> Unit
 ) {
-    if (message.contains("Win")) ConfettiAnimation(modifier = Modifier.fillMaxSize())
+    if (message.contains("You win")) ConfettiAnimation(modifier = Modifier.fillMaxSize())
     AlertDialog(
         onDismissRequest = { },
         title = {
-            if (message.contains("Win")) Text("Congratulations") else Text("Game Over")
+            if (message.contains("You win")) Text("Congratulations") else Text("Game Over")
         },
         text = { Text(message) },
         confirmButton = {

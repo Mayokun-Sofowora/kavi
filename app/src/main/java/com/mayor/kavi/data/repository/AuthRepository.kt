@@ -6,7 +6,7 @@ import com.mayor.kavi.util.Result
 import com.mayor.kavi.data.models.UserProfile
 
 interface AuthRepository {
-    fun signInUser(email: String, password: String): Flow<Result<AuthResult>>
+    fun signInUser(identifier: String, password: String): Flow<Result<AuthResult>>
     fun createUser(username: String, email: String, password: String): Flow<Result<AuthResult>>
     fun saveUserProfileToFirestore(profileData: UserProfile, collection: String = "users")
     fun googleSignIn(credential: AuthCredential): Flow<Result<AuthResult>>

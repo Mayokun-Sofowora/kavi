@@ -32,12 +32,11 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun getGameSessionRef(sessionId: String) =
+    override fun getGameSessionRef(sessionId: String) =
         firebaseFirestore.collection("games")
             .document("sessions")
             .collection("active")
             .document(sessionId)
-
 
     override fun getSessionId(): String? {
         return currentSessionId
@@ -45,11 +44,11 @@ class GameRepositoryImpl @Inject constructor(
 
     override suspend fun createGameSession(opponent: String): Result<GameSession> = try {
         val currentUserId = getCurrentUserId() ?: throw Exception("User not authenticated")
-        
+
         // Get player names
         val currentUser = userRepo.getUserById(currentUserId).dataOrNull
         val opponentUser = userRepo.getUserById(opponent).dataOrNull
-        
+
         val session = GameSession(
             id = UUID.randomUUID().toString(),
             players = listOf(
@@ -261,8 +260,9 @@ class GameRepositoryImpl @Inject constructor(
 
                 snapshot?.documents?.forEach { doc ->
                     val session = doc.toObject(GameSession::class.java)
-                    if (session != null && 
-                        session.players.any { it.id == currentUserId && !it.isReady }) {
+                    if (session != null &&
+                        session.players.any { it.id == currentUserId && !it.isReady }
+                    ) {
                         trySend(session)
                     }
                 }
@@ -271,9 +271,9 @@ class GameRepositoryImpl @Inject constructor(
         awaitClose { subscription.remove() }
     }
 
-    override suspend fun cleanupGameSession(sessionId: String): Result<Unit> = try {
+    override suspend fun endSession(sessionId: String): Result<Unit> = try {
         val currentUserId = getCurrentUserId() ?: throw Exception("User not authenticated")
-        
+
         // Get current session
         val session = getGameSession(sessionId).dataOrNull
         if (session != null) {
@@ -283,21 +283,55 @@ class GameRepositoryImpl @Inject constructor(
                     player.copy(isReady = false)
                 } else player
             }
-            
+
             val updates = mapOf(
                 "players" to updatedPlayers,
                 "gameState.status" to "ended",
                 "isGameStarted" to false
             )
-            
+
             getGameSessionRef(sessionId).update(updates).await()
-            
+
             // If all players have left, delete the session
             if (updatedPlayers.none { it.isReady }) {
                 getGameSessionRef(sessionId).delete().await()
             }
         }
-        
+        currentSessionId = null
+
+        Result.Success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error ending game session")
+        Result.Error("Error ending game session", e)
+    }
+
+    override suspend fun cleanupGameSession(sessionId: String): Result<Unit> = try {
+        val currentUserId = getCurrentUserId() ?: throw Exception("User not authenticated")
+
+        // Get current session
+        val session = getGameSession(sessionId).dataOrNull
+        if (session != null) {
+            // Update session to mark it as ended
+            val updatedPlayers = session.players.map { player ->
+                if (player.id == currentUserId) {
+                    player.copy(isReady = false)
+                } else player
+            }
+
+            val updates = mapOf(
+                "players" to updatedPlayers,
+                "gameState.status" to "ended",
+                "isGameStarted" to false
+            )
+
+            getGameSessionRef(sessionId).update(updates).await()
+
+            // If all players have left, delete the session
+            if (updatedPlayers.none { it.isReady }) {
+                getGameSessionRef(sessionId).delete().await()
+            }
+        }
+
         Result.Success(Unit)
     } catch (e: Exception) {
         Timber.e(e, "Error cleaning up game session")

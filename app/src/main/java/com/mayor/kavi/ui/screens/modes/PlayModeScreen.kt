@@ -34,9 +34,9 @@ fun PlayModeScreen(
     val userProfileState by appViewModel.userProfileState.collectAsState()
     val selectedBoard by gameViewModel.selectedBoard.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(selectedBoard) {
         if (selectedBoard.isEmpty()) {
-            gameViewModel.setSelectedBoard(GameBoard.PIG.modeName)
+            gameViewModel.setSelectedBoard(GameBoard.GREED.modeName)
         }
     }
 

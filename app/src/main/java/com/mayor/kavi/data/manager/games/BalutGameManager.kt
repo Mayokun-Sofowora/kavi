@@ -24,8 +24,8 @@ class BalutGameManager @Inject constructor(
         val startingPlayer = if (Random.nextInt(0, 2) == 0) 0 else AI_PLAYER_ID.hashCode()
         return BalutScoreState(
             playerScores = mapOf(
-                0 to emptyMap(),  // Human player
-                AI_PLAYER_ID.hashCode() to emptyMap()  // AI player
+                0 to emptyMap(),
+                AI_PLAYER_ID.hashCode() to emptyMap()
             ),
             currentPlayerIndex = startingPlayer,
             currentRound = 1,
@@ -41,9 +41,7 @@ class BalutGameManager @Inject constructor(
     }
 
     fun handleTurn(
-        diceResults: List<Int>,
-        currentState: BalutScoreState,
-        heldDice: Set<Int>
+        diceResults: List<Int>, currentState: BalutScoreState, heldDice: Set<Int>
     ): BalutScoreState {
         return if (currentState.currentPlayerIndex == AI_PLAYER_ID.hashCode()) {
             handleAITurn(diceResults, currentState)
@@ -53,9 +51,7 @@ class BalutGameManager @Inject constructor(
     }
 
     private fun handlePlayerTurn(
-        diceResults: List<Int>,
-        currentState: BalutScoreState,
-        heldDice: Set<Int>
+        diceResults: List<Int>, currentState: BalutScoreState, heldDice: Set<Int>
     ): BalutScoreState {
         if (currentState.rollsLeft <= 0) {
             return currentState.copy(
@@ -74,14 +70,15 @@ class BalutGameManager @Inject constructor(
     private fun buildPlayerTurnMessage(diceResults: List<Int>, rollsLeft: Int): String {
         return buildString {
             append("Rolled: ${diceResults.joinToString()}")
-            if (rollsLeft > 1 && rollsLeft < 4) append("\n${rollsLeft-1} rolls left") else append("\nLast roll!")
+            if (rollsLeft > 1 && rollsLeft < 4) append("\n${rollsLeft - 1} rolls left") else append(
+                "\nLast roll!"
+            )
             append("\nHold dice by clicking them.")
         }
     }
 
     private fun handleAITurn(
-        diceResults: List<Int>,
-        currentState: BalutScoreState
+        diceResults: List<Int>, currentState: BalutScoreState
     ): BalutScoreState {
         if (currentState.rollsLeft <= 0) {
             // AI chooses a category
@@ -90,7 +87,7 @@ class BalutGameManager @Inject constructor(
         }
 
         // AI decides which dice to hold
-        val diceToHold = decideAIDiceHolds(diceResults, currentState)
+        val diceToHold = decideAIDiceHolds(diceResults)
 
         val message = buildAITurnMessage(diceResults, diceToHold, currentState.rollsLeft)
         return currentState.copy(
@@ -101,9 +98,7 @@ class BalutGameManager @Inject constructor(
     }
 
     private fun buildAITurnMessage(
-        diceResults: List<Int>,
-        heldDice: Set<Int>,
-        rollsLeft: Int
+        diceResults: List<Int>, heldDice: Set<Int>, rollsLeft: Int
     ): String {
         return buildString {
             append("AI rolled: ${diceResults.joinToString()}")
@@ -113,9 +108,7 @@ class BalutGameManager @Inject constructor(
     }
 
     fun scoreCategory(
-        currentState: BalutScoreState,
-        dice: List<Int>,
-        category: String
+        currentState: BalutScoreState, dice: List<Int>, category: String
     ): BalutScoreState {
         val currentPlayer = currentState.currentPlayerIndex
 
@@ -188,18 +181,13 @@ class BalutGameManager @Inject constructor(
         }
     }
 
-    private fun checkIfGameOver(
-        updatedScores: Map<Int, Map<String, Int>>
-    ): Boolean {
+    private fun checkIfGameOver(updatedScores: Map<Int, Map<String, Int>>): Boolean {
         return updatedScores.values.any { scores ->
             CATEGORIES.all { it in scores }
         }
     }
 
-    private fun decideAIDiceHolds(
-        diceResults: List<Int>,
-        currentState: BalutScoreState
-    ): Set<Int> {
+    private fun decideAIDiceHolds(diceResults: List<Int>): Set<Int> {
         val playerAnalysis = statisticsManager.playerAnalysis.value
         val aiStyle = when (playerAnalysis?.playStyle) {
             PlayStyle.AGGRESSIVE -> 0.7  // More likely to hold promising dice
@@ -225,7 +213,7 @@ class BalutGameManager @Inject constructor(
                     val numberCount = diceResults.count { it == value }
                     val holdProbability = when {
                         numberCount >= 2 -> aiStyle  // More likely to hold pairs
-                        else -> aiStyle - 0.3        // Less likely to hold single dice
+                        else -> aiStyle - 0.3        // Less likely to hold singles
                     }
                     if (Random.nextDouble() < holdProbability) index else null
                 }
@@ -233,10 +221,7 @@ class BalutGameManager @Inject constructor(
         }.toSet()
     }
 
-    fun chooseAICategory(
-        diceResults: List<Int>,
-        currentState: BalutScoreState
-    ): String {
+    fun chooseAICategory(diceResults: List<Int>, currentState: BalutScoreState): String {
         // Get available categories
         val usedCategories = currentState.playerScores[AI_PLAYER_ID.hashCode()] ?: emptyMap()
         val availableCategories = CATEGORIES - usedCategories.keys

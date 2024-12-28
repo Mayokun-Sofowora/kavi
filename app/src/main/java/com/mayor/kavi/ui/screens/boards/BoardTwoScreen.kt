@@ -1,5 +1,6 @@
 package com.mayor.kavi.ui.screens.boards
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +54,9 @@ fun BoardTwoScreen(
         return
     }
 
+    BackHandler{
+        showExitGameDialog = true
+    }
     LaunchedEffect(Unit) {
         viewModel.setSelectedBoard(GameBoard.GREED.modeName)
         viewModel.resetGame()

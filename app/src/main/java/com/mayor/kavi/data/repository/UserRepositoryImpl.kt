@@ -21,8 +21,6 @@ class UserRepositoryImpl @Inject constructor(
         private const val COLLECTION_USERS = "users"
     }
 
-    private var isNetworkConnected = true
-
     override suspend fun getUserById(userId: String): Result<UserProfile> =
         try {
             val document = firestore

@@ -57,18 +57,13 @@ class AppViewModel @Inject constructor(
         _userProfileState.value = Loading(profile) // Set loading state with profile data
 
         val result = userRepository.updateUserProfile(profile)
-        loadUserProfile()
-
         _userProfileState.value = when (result) {
             is Success -> {
-                loadUserProfile()
                 Success(profile)
             }
-
             is Error -> {
                 Error(result.message, result.exception, profile)
             }
-
             else -> {
                 Error("Unknown error", data = profile)
             }
@@ -84,6 +79,7 @@ class AppViewModel @Inject constructor(
         _loginComplete.value = false
         viewModelScope.launch(Dispatchers.IO) {
             userRepository.setUserOnlineStatus(true)
+            loadUserProfile() // Load profile after setting online status
         }
     }
 
@@ -95,12 +91,16 @@ class AppViewModel @Inject constructor(
         _userProfileState.value = Loading()
         val result = userRepository.updateUserProfile(userProfile)
 
-        _userProfileState.value = if (result is Success) {
-            Success(userProfile) // Set the user profile on success
-        } else if (result is Error) {
-            Error(result.message, result.exception) // Set the error if any
-        } else {
-            Loading()
+        _userProfileState.value = when (result) {
+            is Success -> {
+                Success(userProfile)
+            }
+            is Error -> {
+                Error(result.message, result.exception)
+            }
+            else -> {
+                Loading()
+            }
         }
     }
 
