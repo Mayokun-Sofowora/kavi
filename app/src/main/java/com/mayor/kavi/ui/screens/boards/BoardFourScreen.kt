@@ -2,7 +2,6 @@ package com.mayor.kavi.ui.screens.boards
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
@@ -10,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mayor.kavi.data.manager.games.MyGameManager
@@ -21,9 +19,15 @@ import com.mayor.kavi.util.GameBoard
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
@@ -73,11 +77,11 @@ fun BoardFourScreen(
         topBar = {
             TopAppBar(
                 title = { Text(customState.gameName.ifEmpty { "Custom Dice Board" }) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+//                navigationIcon = {
+//                    IconButton(onClick = onBack) {
+//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+//                    }
+//                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)
@@ -172,26 +176,21 @@ fun BoardFourScreen(
             // Score Management
             item {
                 ScoreManagementCard(
-                    scoreInput,
+                    scoreInput = scoreInput,
                     onScoreInputChange = { newScore ->
                         if (newScore.isEmpty() || newScore.toIntOrNull() != null) {
                             scoreInput = newScore
                         }
                     },
-                    noteInput,
+                    noteInput = noteInput,
                     onNoteInputChange = { noteInput = it },
-                    onAddScore = {
-                        scoreInput.toIntOrNull()?.let { score ->
-                            viewModel.addScore(selectedPlayerIndex, score)
-                            scoreInput = ""
-                        }
-                    },
                     onAddNote = {
                         if (noteInput.isNotEmpty()) {
                             viewModel.addNote(selectedPlayerIndex, noteInput)
                             noteInput = ""
                         }
-                    }
+                    },
+                    selectedPlayerIndex = selectedPlayerIndex,
                 )
             }
 
@@ -214,11 +213,18 @@ fun BoardFourScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GameSettingsCard(
-    gameName: String, onGameNameChange: (String) -> Unit,
-    diceCount: String, onDiceCountChange: (Int) -> Unit
+    gameName: String,
+    onGameNameChange: (String) -> Unit,
+    diceCount: String,
+    onDiceCountChange: (Int) -> Unit
 ) {
+    var isEditing by remember { mutableStateOf(false) }
+    var tempGameName by remember { mutableStateOf(gameName) }
+    val focusManager = LocalFocusManager.current
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = colorResource(id = R.color.surface_variant),
@@ -232,10 +238,34 @@ private fun GameSettingsCard(
             Text("Game Settings", style = MaterialTheme.typography.titleLarge)
 
             OutlinedTextField(
-                value = gameName,
-                onValueChange = onGameNameChange,
+                value = if (isEditing) tempGameName else gameName,
+                onValueChange = { tempGameName = it },
                 label = { Text("Game Name") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState ->
+                        isEditing = focusState.isFocused
+                        if (!focusState.isFocused && tempGameName != gameName) {
+                            onGameNameChange(tempGameName)
+                        }
+                    },
+                trailingIcon = {
+                    if (isEditing) {
+                        IconButton(onClick = {
+                            onGameNameChange(tempGameName)
+                            isEditing = false
+                            focusManager.clearFocus()
+                        }) {
+                            Icon(Icons.Default.Check, contentDescription = "Confirm")
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    onGameNameChange(tempGameName)
+                    isEditing = false
+                    focusManager.clearFocus()
+                })
             )
 
             DiceCountSelector(
@@ -354,6 +384,10 @@ private fun PlayerManagementCard(
     onAddPlayer: () -> Unit,
     onUpdatePlayer: () -> Unit
 ) {
+    var isEditing by remember { mutableStateOf(false) }
+    var tempPlayerName by remember { mutableStateOf(newPlayerName) }
+    val focusManager = LocalFocusManager.current
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = colorResource(id = R.color.surface_variant),
@@ -406,21 +440,37 @@ private fun PlayerManagementCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
-                    value = newPlayerName,
-                    onValueChange = onNewPlayerNameChange,
+                    value = if (isEditing) tempPlayerName else newPlayerName,
+                    onValueChange = { tempPlayerName = it },
                     label = { Text("Rename Player") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState ->
+                            isEditing = focusState.isFocused
+                            if (!focusState.isFocused && tempPlayerName != newPlayerName) {
+                                onNewPlayerNameChange(tempPlayerName)
+                            }
+                        },
+                    trailingIcon = {
+                        if (isEditing) {
+                            IconButton(onClick = {
+                                onNewPlayerNameChange(tempPlayerName)
+                                onUpdatePlayer()
+                                isEditing = false
+                                focusManager.clearFocus()
+                            }) {
+                                Icon(Icons.Default.Check, contentDescription = "Confirm")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        onNewPlayerNameChange(tempPlayerName)
+                        onUpdatePlayer()
+                        isEditing = false
+                        focusManager.clearFocus()
+                    })
                 )
-                Button(
-                    onClick = onUpdatePlayer,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Update Name")
-                }
             }
         }
     }
@@ -429,12 +479,13 @@ private fun PlayerManagementCard(
 @Composable
 private fun ScoreManagementCard(
     scoreInput: String,
+    selectedPlayerIndex: Int,
     onScoreInputChange: (String) -> Unit,
     noteInput: String,
     onNoteInputChange: (String) -> Unit,
-    onAddScore: () -> Unit,
     onAddNote: () -> Unit
 ) {
+    val viewModel: GameViewModel = hiltViewModel()
     Card(
         colors = CardDefaults.cardColors(
             containerColor = colorResource(id = R.color.surface_variant),
@@ -445,7 +496,7 @@ private fun ScoreManagementCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Score Management", style = MaterialTheme.typography.titleMedium)
+            Text("Score Modifier", style = MaterialTheme.typography.titleMedium)
 
             // Score Modifiers
             LazyRow(
@@ -467,9 +518,10 @@ private fun ScoreManagementCard(
                 items(modifiers) { modifier ->
                     Button(
                         onClick = {
-                            onScoreInputChange(
-                                ((scoreInput.toIntOrNull() ?: (0 + modifier))).toString()
-                            )
+                            val currentScore = scoreInput.toIntOrNull() ?: 0
+                            val newScore = currentScore + modifier
+                            onScoreInputChange(newScore.toString())
+                            viewModel.addScore(selectedPlayerIndex, newScore)
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colorResource(id = R.color.primary),
@@ -486,28 +538,18 @@ private fun ScoreManagementCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "Current Score: ${scoreInput.toIntOrNull() ?: 0}",
+                    "Score: ${scoreInput.toIntOrNull() ?: 0}",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
                 Button(
                     onClick = { onScoreInputChange("0") },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.error),
-                        contentColor = colorResource(id = R.color.on_error)
-                    )
+//                    colors = ButtonDefaults.buttonColors(
+//                        containerColor = colorResource(id = R.color.error),
+//                        contentColor = colorResource(id = R.color.on_error)
+//                    )
                 ) {
-                    Text("Clear")
-                }
-                Button(
-                    onClick = onAddScore,
-                    enabled = scoreInput.isNotEmpty() && scoreInput != "0",
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.primary),
-                        contentColor = colorResource(id = R.color.on_primary)
-                    )
-                ) {
-                    Text("Add")
+                    Text("Reset score")
                 }
             }
 
@@ -550,7 +592,7 @@ private fun ScoreHistoryCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Score History", style = MaterialTheme.typography.titleMedium)
+            Text("Notes", style = MaterialTheme.typography.titleMedium)
             customState.scoreHistory[selectedPlayerIndex]?.forEach { note ->
                 Text(note, style = MaterialTheme.typography.bodySmall)
             }

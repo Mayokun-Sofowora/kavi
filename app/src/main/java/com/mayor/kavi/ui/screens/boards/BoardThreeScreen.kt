@@ -113,11 +113,11 @@ fun BoardThreeScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Balut Dice Game") },
-                navigationIcon = {
-                    IconButton(onClick = { showExitGameDialog = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+//                navigationIcon = {
+//                    IconButton(onClick = { showExitGameDialog = true }) {
+//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+//                    }
+//                },
                 actions = {
                     IconButton(
                         onClick = { navController.navigate(Routes.Settings.route) },

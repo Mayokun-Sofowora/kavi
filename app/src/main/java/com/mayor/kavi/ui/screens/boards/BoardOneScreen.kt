@@ -99,11 +99,11 @@ fun BoardOneScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Pig Dice Game") },
-                navigationIcon = {
-                    IconButton(onClick = { showExitGameDialog = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+//                navigationIcon = {
+//                    IconButton(onClick = { showExitGameDialog = true }) {
+//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+//                    }
+//                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)

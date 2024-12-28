@@ -107,11 +107,11 @@ fun MultiplayerBoardScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Greed Multiplayer") },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.onBackPressed() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+//                navigationIcon = {
+//                    IconButton(onClick = { viewModel.onBackPressed() }) {
+//                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+//                    }
+//                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = colorResource(id = R.color.primary_container),
                     titleContentColor = colorResource(id = R.color.on_primary_container)
