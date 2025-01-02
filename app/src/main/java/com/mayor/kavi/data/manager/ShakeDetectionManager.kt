@@ -2,7 +2,7 @@ package com.mayor.kavi.data.manager
 
 import android.content.Context
 import android.hardware.*
-import com.mayor.kavi.util.IoDispatcher
+import com.mayor.kavi.di.AppModule.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +25,8 @@ class ShakeDetectionManager @Inject constructor(
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private var accelerometerListener: SensorEventListener? = null
     private var lastShakeTime = 0L
-    private val shakeCooldown = 1000L
-    private val shakeThreshold = 20f  // Increased threshold for better detection
+    private val shakeCooldown = 500L  // Reduced cooldown for better responsiveness
+    private val shakeThreshold = 15f  // Reduced threshold for easier detection
 
     private var onShakeListener: (() -> Unit)? = null
     private var isEnabled = false
@@ -38,9 +38,9 @@ class ShakeDetectionManager @Inject constructor(
             settingsManager.getShakeEnabled().collect { enabled ->
                 withContext(Dispatchers.Main) {
                     isEnabled = enabled
-                    if (enabled) {
+                    if (enabled && !isListening) {
                         startListening()
-                    } else {
+                    } else if (!enabled && isListening) {
                         stopListening()
                     }
                 }
@@ -50,11 +50,13 @@ class ShakeDetectionManager @Inject constructor(
 
     fun setOnShakeListener(listener: () -> Unit) {
         onShakeListener = listener
+        if (isEnabled && !isListening) {
+            startListening()
+        }
     }
 
     fun clearOnShakeListener() {
         onShakeListener = null
-        scope.cancel()
         stopListening()
     }
 
@@ -71,7 +73,7 @@ class ShakeDetectionManager @Inject constructor(
                     val x = it.values[0]
                     val y = it.values[1]
                     val z = it.values[2]
-                    val acceleration = sqrt(x * x + y * y + z * z)
+                    val acceleration = sqrt(x * x + y * y + z * z) - SensorManager.GRAVITY_EARTH
 
                     if (acceleration > shakeThreshold) {
                         lastShakeTime = System.currentTimeMillis()
@@ -102,5 +104,4 @@ class ShakeDetectionManager @Inject constructor(
             }
         }
     }
-
 }

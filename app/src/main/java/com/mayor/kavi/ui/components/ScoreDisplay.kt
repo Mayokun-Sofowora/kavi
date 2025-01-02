@@ -13,11 +13,28 @@ import com.mayor.kavi.R
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
 
 /**
- * Composable to display the scores on the board screen.
+ * A composable that displays game scores and status information.
+ *
+ * Features:
+ * - Current scores for all players
+ * - Turn indicator
+ * - Game messages and status
+ * - Current turn score
+ * - Visual highlighting for active player
+ *
+ * The component adapts its display based on the game mode:
+ * - Pig: Simple numeric scores
+ * - Greed: Scores with minimum threshold indication
+ * - Balut: Category-based scoring
+ * - Custom: Configurable score display
+ *
+ * @param scores Map of player indices to their scores (can be Int or Map for category-based games)
+ * @param currentTurnScore Points accumulated in the current turn
+ * @param message Game status or feedback message
+ * @param currentPlayerIndex Index of the currently active player
  */
 @Composable
 fun ScoreDisplay(
-    gameMode: String,
     scores: Map<Int, Any>,
     currentTurnScore: Int = 0,
     message: String = "",
@@ -34,11 +51,6 @@ fun ScoreDisplay(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = gameMode,
-                style = MaterialTheme.typography.titleLarge
-            )
-
             Text(
                 text = message,
                 style = MaterialTheme.typography.titleMedium,

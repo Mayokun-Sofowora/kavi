@@ -6,11 +6,13 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.mayor.kavi.data.models.GameScoreState
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.IOException
 
-class DataStoreManager(context: Context) {
+class DataStoreManager(
+    context: Context,
+    private val dataStore: DataStore<Preferences> = context.dataStore
+) {
     companion object {
         // Game Interface Mode
         private val INTERFACE_MODE_KEY = stringPreferencesKey("interface_mode")
@@ -29,6 +31,8 @@ class DataStoreManager(context: Context) {
         @Volatile
         private var INSTANCE: DataStoreManager? = null
 
+        private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+
         fun getInstance(context: Context): DataStoreManager {
             return INSTANCE ?: synchronized(this) {
                 DataStoreManager(context).also { INSTANCE = it }
@@ -36,8 +40,6 @@ class DataStoreManager(context: Context) {
         }
     }
 
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
-    private val dataStore = context.dataStore
     private val json = Json { 
         ignoreUnknownKeys = true 
         prettyPrint = true
@@ -101,27 +103,6 @@ class DataStoreManager(context: Context) {
             preferences[BOARD_COLOR_KEY] ?: DEFAULT_BOARD_COLOR_KEY
         }
 
-    // Custom game saves
-    suspend fun saveCustomGame(customGame: GameScoreState.CustomScoreState) {
-        dataStore.edit { preferences ->
-            val existingGamesJson = preferences[CUSTOM_GAMES_KEY] ?: "[]"
-            val existingGames = try {
-                json.decodeFromString<List<GameScoreState.CustomScoreState>>(existingGamesJson).toMutableList()
-            } catch (e: Exception) {
-                mutableListOf()
-            }
-
-            val gameIndex = existingGames.indexOfFirst { it.gameId == customGame.gameId }
-            if (gameIndex != -1) {
-                existingGames[gameIndex] = customGame
-            } else {
-                existingGames.add(customGame)
-            }
-
-            preferences[CUSTOM_GAMES_KEY] = json.encodeToString(existingGames)
-        }
-    }
-
     fun loadCustomGames(): Flow<List<GameScoreState.CustomScoreState>> = dataStore.data
         .catch { exception ->
             if (exception is IOException) emit(emptyPreferences()) else throw exception
@@ -134,18 +115,4 @@ class DataStoreManager(context: Context) {
                 emptyList()
             }
         }
-
-    suspend fun deleteCustomGame(gameId: String) {
-        dataStore.edit { preferences ->
-            val existingGamesJson = preferences[CUSTOM_GAMES_KEY] ?: "[]"
-            val existingGames = try {
-                json.decodeFromString<List<GameScoreState.CustomScoreState>>(existingGamesJson).toMutableList()
-            } catch (e: Exception) {
-                mutableListOf()
-            }
-
-            existingGames.removeAll { it.gameId == gameId }
-            preferences[CUSTOM_GAMES_KEY] = json.encodeToString(existingGames)
-        }
-    }
 }

@@ -1,181 +1,144 @@
 package com.mayor.kavi.ui
 
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavType
+import androidx.navigation.*
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.mayor.kavi.authentication.signin.SignInScreen
 import com.mayor.kavi.authentication.signup.SignUpScreen
-import com.mayor.kavi.ui.screens.LobbyScreen
 import com.mayor.kavi.ui.screens.modes.*
-import com.mayor.kavi.ui.screens.boards.*
+import com.mayor.kavi.ui.screens.gameboards.*
 import com.mayor.kavi.ui.screens.main.*
+import com.mayor.kavi.ui.components.AnalyticsDashboard
+import com.mayor.kavi.ui.screens.main.LeaderboardScreen
 import com.mayor.kavi.ui.viewmodel.*
 
-@Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
-    val gameViewModel = hiltViewModel<GameViewModel>()
-    val appViewModel = hiltViewModel<AppViewModel>()
+sealed class NavigationGraph(val route: String) {
+    object Auth : NavigationGraph("auth_graph")
+    object Main : NavigationGraph("main_graph")
+    object Game : NavigationGraph("game_graph")
+}
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.SignIn.route,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Authentication
-        composable(Routes.SignIn.route) {
-            SignInScreen(navController = navController)
-        }
-        composable(Routes.SignUp.route) {
-            SignUpScreen(navController = navController)
-        }
+sealed class Screen(val route: String) {
+    // Auth Screens
+    object SignIn : Screen("signIn")
+    object SignUp : Screen("signUp")
 
-        // Main Menu
-        composable(Routes.MainMenu.route) {
-            MainMenuScreen(navController = navController)
-        }
+    // Main Screens
+    object MainMenu : Screen("mainMenu")
+    object Settings : Screen("settings")
+    object Statistics : Screen("statistics")
+    object Leaderboard : Screen("leaderboard")
+    object Instructions : Screen("instructions/full")
+    object InstructionsShort : Screen("instructions/short/{page}") {
+        fun createRoute(page: Int) = "instructions/short/$page"
+    }
 
-        // Start Screen
-        composable(Routes.Start.route) {
-            InterfaceModeScreen(
-                viewModel = appViewModel,
-                navController = navController
-            )
-        }
+    object Analytics : Screen("analytics")
 
-        // Board Games
-        composable(Routes.Boards.route) {
-            BoardsScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
+    // Game Screens
+    object Start : Screen("start")
+    object Boards : Screen("classicBoards")
 
-        // Play mode
-        composable(Routes.PlayMode.route) {
-            PlayModeScreen(
-                navController = navController,
-                gameViewModel = gameViewModel,
-                appViewModel = appViewModel
-            )
-        }
-
-        // Game Boards
-        composable(Routes.BoardOne.route) {
-            BoardOneScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        composable(Routes.BoardTwo.route) {
-            BoardTwoScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        composable(
-            route = Routes.MultiplayerBoard.route + "/{sessionId}",
-            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            backStackEntry.arguments?.getString("sessionId")
-                ?: return@composable
-            MultiplayerBoardScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        composable(Routes.BoardThree.route) {
-            BoardThreeScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        composable(Routes.BoardFour.route) {
-            BoardFourScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        // Multiplayer Lobby
-        composable(Routes.Lobby.route) {
-            LobbyScreen(
-                navController = navController,
-                appViewModel = appViewModel,
-                gameViewModel = gameViewModel
-            )
-        }
-
-        // Settings
-        composable(Routes.Settings.route) {
-            SettingsScreen(
-                viewModel = gameViewModel,
-                navController = navController
-            )
-        }
-
-        // Statistics
-        composable(Routes.Statistics.route) {
-            StatisticsScreen(
-                appViewModel = appViewModel,
-                gameViewModel = gameViewModel,
-                navController = navController  // Changed from onBack
-            )
-        }
-
-        // Instructions
-        composable(Routes.Instructions.route) {
-            InstructionsScreen(
-                navController = navController,
-                startPage = 0,
-                showOnlyPage = false
-            )
-        }
-
-        composable(
-            route = Routes.InstructionsShort.route + "/{page}",
-            arguments = listOf(navArgument("page") { type = NavType.IntType })
-        ) { backStackEntry ->
-            val page = backStackEntry.arguments?.getInt("page") ?: 1
-            InstructionsScreen(
-                navController = navController,
-                startPage = page,
-                showOnlyPage = true
-            )
-        }
-
-        // Sign Out
-        composable(Routes.SignOut.route) {
-            SignInScreen(navController = navController)
-        }
+    // Game Board Screens
+    sealed class Board(route: String) : Screen(route) {
+        object One : Board("boardOne")
+        object Two : Board("boardTwo")
+        object Three : Board("boardThree")
+        object Four : Board("boardFour")
     }
 }
 
-sealed class Routes(val route: String) {
-    object SignIn : Routes("signIn")
-    object SignUp : Routes("signUp")
-    object MainMenu : Routes("mainMenu")
-    object Start : Routes("start")
-    object ArScreen : Routes("arScreen")
-    object Boards : Routes("classicBoards")
-    object BoardOne : Routes("boardOne")
-    object BoardTwo : Routes("boardTwo")
-    object BoardThree : Routes("boardThree")
-    object BoardFour : Routes("boardFour")
-    object MultiplayerBoard : Routes("multiplayerBoard")
-    object PlayMode : Routes("playMode")
-    object Settings : Routes("settings")
-    object Lobby : Routes("lobby")
-    object Instructions : Routes("instructions/full")
-    object InstructionsShort : Routes("instructions/short")
-    object Statistics : Routes("statistics")
-    object SignOut : Routes("signOut")
+@Composable
+fun AppNavigation() {
+    val navController: NavHostController = rememberNavController()
+    val appViewModel: AppViewModel = hiltViewModel()
+    val gameViewModel: GameViewModel = hiltViewModel()
+    val leaderboardViewModel: LeaderboardViewModel = hiltViewModel()
+
+    // Collect signed in state to update the navigation
+    val signedInState by appViewModel.isUserSignedIn.collectAsState()
+    val loginState by appViewModel.loginComplete.collectAsState()
+
+    NavHost(
+        navController = navController,
+        startDestination = when {
+            !loginState -> NavigationGraph.Auth.route
+            signedInState -> NavigationGraph.Main.route
+            else -> NavigationGraph.Auth.route
+        }
+    ) {
+        // Auth Navigation Graph
+        navigation(
+            startDestination = Screen.SignIn.route,
+            route = NavigationGraph.Auth.route
+        ) {
+            composable(Screen.SignIn.route) {
+                SignInScreen(navController)
+            }
+            composable(Screen.SignUp.route) {
+                SignUpScreen(navController)
+            }
+        }
+
+        // Main Navigation Graph
+        navigation(
+            startDestination = Screen.MainMenu.route,
+            route = NavigationGraph.Main.route
+        ) {
+            composable(Screen.MainMenu.route) {
+                MainMenuScreen(navController)
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen(gameViewModel, navController)
+            }
+            composable(Screen.Statistics.route) {
+                StatisticsScreen(appViewModel, gameViewModel, navController)
+            }
+            composable(Screen.Leaderboard.route) {
+                LeaderboardScreen(leaderboardViewModel, navController)
+            }
+            composable(Screen.Instructions.route) {
+                InstructionsScreen(navController, startPage = 0, showOnlyPage = false)
+            }
+            composable(
+                route = Screen.InstructionsShort.route,
+                arguments = listOf(navArgument("page") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val page = backStackEntry.arguments?.getInt("page") ?: 1
+                InstructionsScreen(navController, startPage = page, showOnlyPage = true)
+            }
+            composable(Screen.Analytics.route) {
+                AnalyticsDashboard()
+            }
+        }
+
+        // Game Navigation Graph
+        navigation(
+            startDestination = Screen.Start.route,
+            route = NavigationGraph.Game.route
+        ) {
+            composable(Screen.Start.route) {
+                InterfaceModeScreen(navController, appViewModel)
+            }
+            composable(Screen.Boards.route) {
+                BoardsScreen(gameViewModel, navController)
+            }
+
+            // Game Boards
+            composable(Screen.Board.One.route) {
+                BoardOneScreen(gameViewModel, navController)
+            }
+            composable(Screen.Board.Two.route) {
+                BoardTwoScreen(gameViewModel, navController)
+            }
+            composable(Screen.Board.Three.route) {
+                BoardThreeScreen(gameViewModel, navController)
+            }
+            composable(Screen.Board.Four.route) {
+                BoardFourScreen(gameViewModel, navController)
+            }
+        }
+    }
 }

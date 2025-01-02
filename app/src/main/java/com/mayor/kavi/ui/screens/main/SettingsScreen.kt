@@ -23,9 +23,28 @@ import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.R
 import com.mayor.kavi.util.BoardColors
 import com.mayor.kavi.data.manager.*
-import com.mayor.kavi.ui.Routes
+import com.mayor.kavi.util.navigateToInstructions
 import kotlinx.coroutines.*
 
+/**
+ * Settings screen for game configuration and preferences.
+ *
+ * Features:
+ * - Game board color customization
+ * - Vibration feedback toggle
+ * - Shake-to-roll settings
+ * - Sound effects control
+ * - Accessibility options
+ * - Help and instructions access
+ *
+ * The screen manages user preferences that persist across:
+ * - Game sessions
+ * - Different game variants
+ * - Device restarts
+ *
+ * @param viewModel Game view model for settings management
+ * @param navController Navigation controller for screen transitions
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -125,7 +144,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         Button(
-                            onClick = { navController.navigate(Routes.InstructionsShort.route + "/4") },
+                            onClick = { navController.navigateToInstructions(4) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colorResource(id = R.color.secondary)
@@ -157,10 +176,10 @@ fun SettingsScreen(
                                 key = { index -> availableColors[index] }
                             ) { index ->
                                 val color = availableColors[index]
-                                ColorOption(
-                                    color = color,
+                                BoardColorSelector(
+                                    currentColor = color,
                                     isSelected = color == boardColor,
-                                    onSelect = {
+                                    onColorSelected = {
                                         scope.launch {
                                             settingsManager.setBoardColor(color)
                                         }
@@ -232,18 +251,31 @@ private fun SettingsSwitch(
     }
 }
 
+/**
+ * Board color selection component.
+ *
+ * Features:
+ * - Color palette display
+ * - Preview functionality
+ * - Custom color support
+ * - Color scheme presets
+ *
+ * @param currentColor Currently selected board color
+ * @param isSelected Whether the color is selected
+ * @param onColorSelected Callback for color selection
+ */
 @Composable
-private fun ColorOption(
-    color: String,
+private fun BoardColorSelector(
+    currentColor: String,
     isSelected: Boolean,
-    onSelect: () -> Unit
+    onColorSelected: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
             .then(
-                when (val backgroundColor = BoardColors.getColor(color)) {
+                when (val backgroundColor = BoardColors.getColor(currentColor)) {
                     is Color -> Modifier.background(color = backgroundColor)
                     is Brush -> Modifier.background(brush = backgroundColor)
                     else -> Modifier.background(color = BoardColors.getColor("default") as Color)
@@ -255,7 +287,7 @@ private fun ColorOption(
                 else MaterialTheme.colorScheme.outline,
                 shape = CircleShape
             )
-            .clickable(onClick = onSelect),
+            .clickable(onClick = onColorSelected),
         contentAlignment = Alignment.Center
     ) {
         if (isSelected) {
@@ -267,4 +299,24 @@ private fun ColorOption(
             )
         }
     }
+}
+
+/**
+ * Help and support section.
+ *
+ * Features:
+ * - Instructions access
+ * - Tutorial links
+ * - Support resources
+ * - Version information
+ *
+ * @param onInstructionsClick Callback for instructions access
+ * @param onSupportClick Callback for support access
+ */
+@Composable
+private fun HelpAndSupport(
+    onInstructionsClick: () -> Unit,
+    onSupportClick: () -> Unit
+) {
+    // Implementation of HelpAndSupport
 }

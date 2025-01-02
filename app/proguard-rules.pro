@@ -19,3 +19,64 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep line numbers for better crash reports
+-keepattributes SourceFile,LineNumberTable
+
+# Firebase
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes Exception
+-keepattributes InnerClasses
+
+# Firebase Auth
+-keepattributes Signature
+-keepclassmembers class com.mayor.kavi.data.models.** {
+  *;
+}
+
+# Kotlin Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Kotlin Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# Hilt
+-keepclasseswithmembers class * {
+    @dagger.* <methods>;
+}
+
+# Keep data models
+-keep class com.mayor.kavi.data.models.** { *; }
+
+# Keep Dokka classes
+-keep class org.jetbrains.dokka.** { *; }
+-keep class com.fasterxml.jackson.** { *; }
+-keep class freemarker.** { *; }
+-dontwarn org.jetbrains.dokka.**
+-dontwarn com.fasterxml.jackson.**
+-dontwarn freemarker.**
+-dontwarn java.beans.**
+-dontwarn javax.swing.**
+-dontwarn org.jaxen.**
+-dontwarn org.python.core.**
+-dontwarn org.zeroturnaround.javarebel.**
+
+# Keep documentation-related classes
+-keepclasseswithmembers class * {
+    @org.jetbrains.dokka.* *;
+}
+
+# Keep metadata
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable
+-keepattributes Signature
+-keepattributes Exceptions

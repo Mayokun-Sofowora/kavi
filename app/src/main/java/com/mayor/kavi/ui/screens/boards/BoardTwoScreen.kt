@@ -3,17 +3,14 @@ package com.mayor.kavi.ui.screens.boards
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -21,13 +18,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
-import com.mayor.kavi.data.models.*
-import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.ui.viewmodel.*
+import com.mayor.kavi.data.models.GameScoreState
 import com.mayor.kavi.ui.components.*
+import com.mayor.kavi.ui.viewmodel.GameViewModel
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
-import com.mayor.kavi.util.BoardColors
-import com.mayor.kavi.util.GameBoard
+import com.mayor.kavi.util.*
+import com.mayor.kavi.util.navigateToSettings
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +32,7 @@ fun BoardTwoScreen(
     viewModel: GameViewModel = hiltViewModel(),
     navController: NavController
 ) {
+    val selectedBoard by viewModel.selectedBoard.collectAsState()
     val gameState by viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
@@ -44,6 +41,7 @@ fun BoardTwoScreen(
     val settingsManager = LocalSettingsManager.current
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
     var showExitGameDialog by remember { mutableStateOf(false) }
+    var currentMessage by remember { mutableStateOf("") }
 
     // Safe cast with early return if wrong game type
     val greedState = (gameState as? GameScoreState.GreedScoreState) ?: run {
@@ -54,13 +52,27 @@ fun BoardTwoScreen(
         return
     }
 
-    BackHandler {
-        showExitGameDialog = true
+    BackHandler { showExitGameDialog = true }
+
+    LaunchedEffect(selectedBoard) {
+        if (selectedBoard != GameBoard.GREED.modeName) {
+            viewModel.setSelectedBoard(GameBoard.GREED.modeName)
+            viewModel.resetGame()
+        }
     }
-    LaunchedEffect(Unit) {
-        viewModel.setSelectedBoard(GameBoard.GREED.modeName)
-        viewModel.resetGame()
+
+    // Update message when game state changes
+    LaunchedEffect(greedState, isRolling) {
+        currentMessage = GameMessages.buildGreedScoreMessage(
+            dice = greedState.lastRoll,
+            score = greedState.playerScores[greedState.currentPlayerIndex] ?: 0,
+            turnScore = greedState.currentTurnScore,
+            playerIndex = greedState.currentPlayerIndex,
+            isGameOver = greedState.isGameOver
+        )
+
     }
+
 
     // Handle AI turns
     LaunchedEffect(greedState.currentPlayerIndex, isRolling) {
@@ -75,23 +87,23 @@ fun BoardTwoScreen(
             ) {
                 // Roll the dice
                 viewModel.rollDice()
-                delay(100) // Wait for roll animation and to show result
+                delay(1500) // Wait for roll animation and to show result
 
                 // If the turn score is 0, AI busted
-                if (greedState.turnScore == 0) {
-                    delay(500) // Wait a moment to show the bust
+                if (greedState.currentTurnScore == 0) {
+                    delay(1000) // Wait a moment to show the bust
                     viewModel.endGreedTurn()
                     break
                 }
 
                 // Check if AI should bank
                 if (viewModel.shouldAIBank(
-                        currentTurnScore = greedState.turnScore,
+                        currentTurnScore = greedState.currentTurnScore,
                         aiTotalScore = greedState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0,
                         playerTotalScore = greedState.playerScores[0] ?: 0
                     )
                 ) {
-                    delay(500) // Wait a moment before banking
+                    delay(1000) // Wait a moment before banking
                     viewModel.endGreedTurn()
                     break
                 }
@@ -132,7 +144,7 @@ fun BoardTwoScreen(
                 ),
                 actions = {
                     IconButton(
-                        onClick = { navController.navigate(Routes.Settings.route) },
+                        onClick = { navController.navigateToSettings() },
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
@@ -166,8 +178,9 @@ fun BoardTwoScreen(
             ScoreDisplay(
                 gameMode = "Greed",
                 scores = greedState.playerScores,
-                currentTurnScore = greedState.turnScore,
-                message = greedState.message,
+                currentTurnScore = greedState.currentTurnScore,
+                message = currentMessage,
+//                message = generateGameMessage(greedState),
                 currentPlayerIndex = greedState.currentPlayerIndex
             )
 
@@ -251,8 +264,8 @@ fun BoardTwoScreen(
 
     // Game End Dialog
     if (greedState.isGameOver) {
-        GameEndDialog(
-            message = greedState.message,
+        EndGameDialog(
+            greedState = greedState,
             onPlayAgain = { viewModel.resetGame() },
             onExit = navController::navigateUp
         )
@@ -260,20 +273,50 @@ fun BoardTwoScreen(
 
     // Exit Game Dialog
     if (showExitGameDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitGameDialog = false },
-            title = { Text("Exit Game") },
-            text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
-            confirmButton = {
-                TextButton(onClick = navController::navigateUp) {
-                    Text("Exit")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitGameDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+        ExitDialog(
+            onDismiss = { showExitGameDialog = false },
+            onConfirm = navController::navigateUp
         )
     }
+}
+
+@Composable
+private fun EndGameDialog(
+    greedState: GameScoreState.GreedScoreState,
+    onPlayAgain: () -> Unit,
+    onExit: () -> Unit
+) {
+    GameEndDialog(
+        message = GameMessages.buildGreedScoreMessage(
+            dice = greedState.lastRoll,
+            score = greedState.playerScores[greedState.currentPlayerIndex] ?: 0,
+            turnScore = greedState.currentTurnScore,
+            playerIndex = greedState.currentPlayerIndex,
+            isGameOver = greedState.isGameOver
+        ),
+        onPlayAgain = onPlayAgain,
+        onExit = onExit
+    )
+}
+
+@Composable
+private fun ExitDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Exit Game") },
+        text = { Text("Are you sure you want to exit the game? Your progress will be lost.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Exit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

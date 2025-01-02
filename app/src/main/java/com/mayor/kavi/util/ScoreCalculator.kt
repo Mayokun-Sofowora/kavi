@@ -1,19 +1,38 @@
-// ScoreCalculator.kt
 package com.mayor.kavi.util
 
 import com.mayor.kavi.data.models.GameScoreState
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
 
 /**
- * ScoreCalculator is responsible for calculating scores based on dice rolls.
+ * Utility object for calculating scores in various dice games.
+ *
+ * This calculator handles score computation for different dice game variants:
+ * - Greed: Complex scoring with multiple dice combinations
+ * - Balut: Category-based scoring similar to Yahtzee
+ * - Pig: Simple single-die scoring
  */
 object ScoreCalculator {
+    /**
+     * Calculates the score for a Greed game roll.
+     *
+     * Scoring rules:
+     * - Straight (1-2-3-4-5-6): 1500 points
+     * - Six of a kind: 3000 points
+     * - Five of a kind: 2000 points
+     * - Three pairs: 1500 points
+     * - Three of a kind: Number × 100 (1000 for three 1s)
+     * - Single 1s: 100 points each
+     * - Single 5s: 50 points each
+     *
+     * @param dice List of die values to score
+     * @return Pair of (total score, indices of scoring dice)
+     */
     fun calculateGreedScore(dice: List<Int>): Pair<Int, Set<Int>> {
         var score = 0
         val scoringDice = mutableSetOf<Int>()
         val diceFrequency = dice.groupBy { it }
 
-        // Check for special combinations first
+        // Check for special combinations (straight, 6 of a kind, 5 of a kind)
         when {
             dice.sorted() == listOf(1, 2, 3, 4, 5, 6) -> {
                 score = 1500
@@ -40,26 +59,28 @@ object ScoreCalculator {
             }
         }
 
-        // Process remaining combinations
+        // Process remaining combinations (3 pairs, 1s, 5s)
         for ((number, occurrences) in diceFrequency) {
             when {
                 occurrences.size >= 3 -> {
                     score += if (number == 1) 1000 else number * 100
-                    scoringDice.addAll(occurrences.take(3).map { dice.indexOf(it) })
+                    scoringDice.addAll(dice.mapIndexedNotNull { index, it1 -> if (it1 == number) index else null }
+                        .take(3))
 
                     // Score remaining 1s and 5s
                     val remaining = occurrences.size - 3
                     if (number == 1 || number == 5) {
                         score += remaining * (GameScoreState.GreedScoreState.SCORING_VALUES[number]
                             ?: 0)
-                        scoringDice.addAll(occurrences.takeLast(remaining).map { dice.indexOf(it) })
+                        scoringDice.addAll(dice.mapIndexedNotNull { index, it1 -> if (it1 == number) index else null }
+                            .takeLast(remaining))
                     }
                 }
 
                 number == 1 || number == 5 -> {
                     score += occurrences.size * (GameScoreState.GreedScoreState.SCORING_VALUES[number]
                         ?: 0)
-                    scoringDice.addAll(occurrences.map { dice.indexOf(it) })
+                    scoringDice.addAll(dice.mapIndexedNotNull { index, it1 -> if (it1 == number) index else null })
                 }
             }
         }
@@ -67,6 +88,20 @@ object ScoreCalculator {
         return Pair(score, scoringDice)
     }
 
+    /**
+     * Calculates the score for a Balut category.
+     *
+     * Scoring rules vary by category:
+     * - Number categories (Ones through Sixes): Sum of matching numbers
+     * - Full House: Sum of all dice
+     * - Four of a Kind: Sum of all dice
+     * - Straight: 30 points
+     * - Five of a Kind: 50 points
+     * - Choice: Sum of all dice
+     *
+     * @param dice List of die values to score
+     * @return Pair of (score for the category, indices of scoring dice)
+     */
     fun calculateBalutScore(dice: List<Int>): Pair<Int, Set<Int>> {
         val grouped = dice.groupBy { it }
 
@@ -89,9 +124,13 @@ object ScoreCalculator {
             return Pair(35, dice.mapIndexed { index, _ -> index }.toSet())
         }
 
-        // Check for Straight (1-2-3-4-5 or 2-3-4-5-6)
-        val sorted = dice.sorted()
-        if (sorted.windowed(2).all { (a, b) -> b - a == 1 }) {
+        // Check for Large Straight
+        if (hasLargeStraight(dice)) {
+            return Pair(40, dice.mapIndexed { index, _ -> index }.toSet())
+        }
+
+        // Check for Small Straight
+        if (hasSmallStraight(dice)) {
             return Pair(30, dice.mapIndexed { index, _ -> index }.toSet())
         }
 
@@ -99,157 +138,145 @@ object ScoreCalculator {
         return Pair(0, emptySet())
     }
 
+    fun calculateCategoryScore(dice: List<Int>, category: String): Int {
+        return when (category) {
+            // Number categories (Ones through Sixes)
+            "Ones" -> dice.count { it == 1 } * 1
+            "Twos" -> dice.count { it == 2 } * 2
+            "Threes" -> dice.count { it == 3 } * 3
+            "Fours" -> dice.count { it == 4 } * 4
+            "Fives" -> dice.count { it == 5 } * 5
+            "Sixes" -> dice.count { it == 6 } * 6
+
+            // Special combinations
+            "Five of a Kind" -> {
+                if (dice.groupBy { it }.any { it.value.size == 5 }) 50 else 0
+            }
+
+            "Four of a Kind" -> {
+                if (dice.groupBy { it }.any { it.value.size >= 4 }) 40 else 0
+            }
+
+            "Full House" -> {
+                val groups = dice.groupBy { it }
+                if (groups.size == 2 && groups.values.any { it.size == 3 }) 35 else 0
+            }
+
+            "Small Straight" -> if (hasSmallStraight(dice)) 30 else 0
+            "Large Straight" -> if (hasLargeStraight(dice)) 40 else 0
+            "Choice" -> dice.sum()
+            else -> 0
+        }
+    }
+
+    private fun hasSmallStraight(dice: List<Int>): Boolean {
+        val sortedDice = dice.distinct().sorted()
+        if (sortedDice.size < 4) return false
+
+        return when {
+            sortedDice.take(4) == listOf(1, 2, 3, 4) -> true
+            sortedDice.size >= 5 && sortedDice.subList(1, 5) == listOf(2, 3, 4, 5) -> true
+            sortedDice.take(4) == listOf(2, 3, 4, 5) -> true
+            sortedDice.size >= 5 && sortedDice.subList(1, 5) == listOf(3, 4, 5, 6) -> true
+            sortedDice.take(4) == listOf(3, 4, 5, 6) -> true
+            else -> false
+        }
+    }
+
+    private fun hasLargeStraight(dice: List<Int>): Boolean {
+        val sortedDice = dice.distinct().sorted()
+        return sortedDice == listOf(1, 2, 3, 4, 5) ||
+                sortedDice == listOf(2, 3, 4, 5, 6)
+    }
+
 }
 
 object GameMessages {
-    private fun getPlayerName(playerIndex: Int): String = when (playerIndex) {
-        AI_PLAYER_ID.hashCode() -> "AI"
-        else -> "You"
-    }
+    private fun getPlayerName(playerIndex: Int): String =
+        if (playerIndex == AI_PLAYER_ID.hashCode()) "AI" else "You"
 
-    fun buildPigScoreMessage(die: Int, score: Int, playerIndex: Int): String = when {
-        die == 1 -> "${getPlayerName(playerIndex)}: Rolled 1 - " +
-                (if (playerIndex == AI_PLAYER_ID.hashCode()) "Your turn!" else "AI's Turn!")
+    private fun getPossessivePlayer(playerIndex: Int): String =
+        if (playerIndex == AI_PLAYER_ID.hashCode()) "AI's" else "Your"
 
-        score >= 100 -> "${getPlayerName(playerIndex)} win${
-            if (playerIndex == AI_PLAYER_ID.hashCode())
-                "s" else ""
-        } with $score points!"
-
-        else -> "${getPlayerName(playerIndex)}: Rolled $die - Turn score: $score"
-    }
-
-//    fun buildGreedScoreMessage(
-//        dice: List<Int>,
-//        score: Int,
-//        turnScore: Int,
-//        playerIndex: Int,
-//        roundHistory: Map<Int, List<Int>>
-//    ): String {
-//        if (score == 0 || score == 1500) return "${getPlayerName(playerIndex)} busts! No scoring dice."
-//
-//        val message = buildString {
-//            append("${getPlayerName(playerIndex)} rolled: ${dice.joinToString()}\n")
-//
-//            when {
-//                // Special combinations
-//                dice.sorted() == listOf(1, 2, 3, 4, 5, 6) -> append("Straight! +1000")
-//                dice.groupBy { it }.any { it.value.size == 6 } -> {
-//                    val num = dice[0]
-//                    val fiveOfKind = 2000 * num
-//                    append("Six of a Kind! +${fiveOfKind * 2}")
-//                }
-//
-//                dice.groupBy { it }.any { it.value.size == 5 } -> {
-//                    val num = dice.groupBy { it }.entries.first { it.value.size == 5 }.key
-//                    val fourOfKind = 1000 * num
-//                    append("Five of a Kind! +${fourOfKind * 2}")
-//                }
-//
-//                dice.groupBy { it }.any { it.value.size == 4 } -> {
-//                    val num = dice.groupBy { it }.entries.first { it.value.size == 4 }.key
-//                    val threeOfKind = if (num == 1) 1000 else num * 100
-//                    append("Four of a Kind! +${threeOfKind * 2}")
-//                }
-//
-//                dice.groupBy { it }
-//                    .count { it.value.size == 2 } == 3 -> append("Three Pairs! +1000")
-//
-//                else -> {
-//                    // Handle three of a kind and single scoring dice
-//                    dice.groupBy { it }.forEach { (num, group) ->
-//                        when (group.size) {
-//                            3 -> appendLine("Three ${num}s: +${if (num == 1) 1000 else num * 100}")
-//                            in 1..2 -> if (num in setOf(1, 5)) {
-//                                appendLine("${group.size} × $num: +${group.size * (if (num == 1) 100 else 50)}")
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//
-//            appendLine("\nTurn Score: $turnScore")
-//            val isOnBoard = (roundHistory[playerIndex] ?: emptyList()).any { it >= 800 }
-//            if (!isOnBoard && turnScore < 800) {
-//                appendLine("Need ${800 - turnScore} more points to get on board")
-//            }
-//        }
-//        return message.trim()
-//    }
-
-    fun buildGreedScoreMessage(
-        dice: List<Int>,
-        score: Int,
-        turnScore: Int,
-        playerIndex: Int,
-        roundHistory: Map<Int, List<Int>>
+    fun buildPigScoreMessage(
+        die: Int, score: Int, playerIndex: Int, isGameOver: Boolean, hasRolled: Boolean = false
     ): String {
-        if (score == 0) return "${getPlayerName(playerIndex)} busts! No scoring dice."
+        if (isGameOver) {
+            val winner = getPlayerName(playerIndex)
+            return if (playerIndex == AI_PLAYER_ID.hashCode()) {
+                "$winner wins with $score points! Better luck next time!"
+            } else {
+                "$winner win with $score points!"
+            }
+        }
 
         return buildString {
-            append("${getPlayerName(playerIndex)} rolled: ${dice.joinToString()}\n")
-
-            when {
-                // Straight
-                dice.toSet() == setOf(1, 2, 3, 4, 5, 6) -> appendLine("Straight! +1000")
-
-                // Six of a Kind
-                dice.groupBy { it }.any { it.value.size == 6 } -> {
-                    val num = dice[0]
-                    appendLine("Six of a Kind! +${num * 400}")
+            if (hasRolled) {
+                if (die > 0) {
+                    append("${getPlayerName(playerIndex)} rolled $die")
                 }
-
-                // Five of a Kind
-                dice.groupBy { it }.any { it.value.size == 5 } -> {
-                    val num = dice.groupBy { it }.entries.first { it.value.size == 5 }.key
-                    appendLine("Five of a Kind! +${num * 200}")
-                }
-
-                // Four of a Kind
-                dice.groupBy { it }.any { it.value.size == 4 } -> {
-                    val num = dice.groupBy { it }.entries.first { it.value.size == 4 }.key
-                    appendLine("Four of a Kind! +${num * 100}")
-                }
-
-                // Three Pairs
-                dice.groupBy { it }.count { it.value.size == 2 } == 3 -> appendLine("Three Pairs! +1000")
-
-                else -> {
-                    // Handle Three of a Kind and single scoring dice
-                    dice.groupBy { it }.forEach { (num, group) ->
-                        when (group.size) {
-                            3 -> appendLine("Three ${num}s: +${if (num == 1) 1000 else num * 100}")
-                            in 1..2 -> if (num in setOf(1, 5)) {
-                                appendLine("${group.size} × $num: +${group.size * (if (num == 1) 100 else 50)}")
-                            }
-                        }
-                    }
-                }
-            }
-
-            appendLine("\nTurn Score: $turnScore")
-
-            val isOnBoard = (roundHistory[playerIndex] ?: emptyList()).any { it >= 800 }
-            if (!isOnBoard && turnScore < 800) {
-                appendLine("Need ${800 - turnScore} more points to get on board")
+            } else {
+                append("You loose a turn if you roll a 1")
+                append("\n${getPossessivePlayer(playerIndex)} turn to roll")
             }
         }.trim()
     }
 
+    fun buildGreedScoreMessage(
+        dice: List<Int>, score: Int, turnScore: Int, playerIndex: Int,
+        isGameOver: Boolean = false
+    ): String {
+        if (isGameOver) {
+            val winner = getPlayerName(playerIndex)
+            return if (playerIndex == AI_PLAYER_ID.hashCode()) {
+                "$winner wins with $score points! Better luck next time!"
+            } else {
+                "$winner win with $score points!"
+            }
+        }
 
-    fun buildBalutCategoryMessage(
-        dice: List<Int>,
-        category: String,
-        score: Int,
-        playerIndex: Int,
-        isGameOver: Boolean = false,
-        totalScore: Int = 0
-    ): String = when {
-        isGameOver -> buildBalutEndGameMessage(totalScore, playerIndex)
-        else -> "${getPlayerName(playerIndex)} - $category: ${dice.joinToString()} = $score points"
+        return buildString {
+            if (dice.isNotEmpty()) {
+                append("${getPlayerName(playerIndex)} rolled: ${dice.joinToString()}")
+
+                // Add message for bust or bad roll
+                if (turnScore == 0 && dice.isNotEmpty()) {
+                    append("\nNo scoring dice - turn ended!")
+                }
+            } else {
+                append("${getPossessivePlayer(playerIndex)} turn")
+            }
+
+            if (turnScore > 0) {
+                append("\nTurn Score: $turnScore")
+            }
+
+            if (score == 0) {
+                append("\nYou need 800 points to start scoring")
+            }
+        }.trim()
     }
 
-    private fun buildBalutEndGameMessage(totalScore: Int, playerIndex: Int): String {
+    fun buildBalutCategoryMessage(
+        category: String, playerIndex: Int, isGameOver: Boolean = false,
+        totalScore: Int = 0
+    ): String = when {
+        isGameOver -> buildEndGameMessage(totalScore, playerIndex)
+        category.isEmpty() -> when (playerIndex) {
+            0 -> "${getPossessivePlayer(playerIndex)} turn"
+            else -> "${getPossessivePlayer(playerIndex)} turn"
+        }
+
+        else -> buildString {
+            append("${getPlayerName(playerIndex)} - ")
+            append("Category: $category, ")
+            if (totalScore > 0) {
+                append(", Total Score: $totalScore")
+            }
+        }
+    }
+
+    private fun buildEndGameMessage(totalScore: Int, playerIndex: Int): String {
         val playerName = getPlayerName(playerIndex)
         return if (playerIndex == AI_PLAYER_ID.hashCode()) {
             "$playerName wins with $totalScore points! Better luck next time!"

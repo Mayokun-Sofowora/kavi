@@ -12,7 +12,33 @@ import androidx.compose.ui.unit.dp
 import com.mayor.kavi.R
 
 /**
- * Composable to display the dice on the board screen.
+ * Arrangement options for dice display layout.
+ *
+ * - GRID: Displays dice in a grid pattern (ideal for multiple dice)
+ * - ROW: Displays dice in a horizontal row (ideal for single die or few dice)
+ */
+enum class DiceArrangement {
+    GRID, ROW
+}
+
+/**
+ * A composable that displays interactive dice with animations and hold functionality.
+ *
+ * Features:
+ * - Configurable layout (grid or row)
+ * - Rolling animations
+ * - Dice holding mechanism
+ * - Turn-based interaction control
+ * - Customizable size and appearance
+ *
+ * @param diceImages List of resource IDs for dice face images
+ * @param isRolling Whether dice are currently in rolling animation
+ * @param heldDice Set of indices of dice that are currently held
+ * @param isMyTurn Whether it's the player's turn (affects interaction)
+ * @param onDiceHold Callback for when a die is held/unheld (null disables holding)
+ * @param diceSize Size of each die
+ * @param arrangement Layout arrangement (GRID or ROW)
+ * @param modifier Optional modifier for the component
  */
 @Composable
 fun DiceDisplay(
@@ -45,10 +71,21 @@ fun DiceDisplay(
     }
 }
 
-enum class DiceArrangement {
-    GRID, ROW
-}
-
+/**
+ * Displays dice in a grid layout.
+ *
+ * Arranges dice in a responsive grid that adjusts based on:
+ * - Number of dice
+ * - Available space
+ * - Device orientation
+ *
+ * @param diceImages List of resource IDs for dice face images
+ * @param isRolling Whether dice are currently in rolling animation
+ * @param heldDice Set of indices of dice that are currently held
+ * @param isMyTurn Whether it's the player's turn
+ * @param onDiceHold Callback for dice hold/unhold actions
+ * @param diceSize Size of each die
+ */
 @Composable
 private fun DiceGrid(
     diceImages: List<Int>,
@@ -99,6 +136,21 @@ private fun DiceGrid(
     }
 }
 
+/**
+ * Displays dice in a horizontal row.
+ *
+ * Ideal for:
+ * - Single die games (Pig)
+ * - Small number of dice
+ * - Horizontal layouts
+ *
+ * @param diceImages List of resource IDs for dice face images
+ * @param isRolling Whether dice are currently in rolling animation
+ * @param heldDice Set of indices of dice that are currently held
+ * @param isMyTurn Whether it's the player's turn
+ * @param onDiceHold Callback for dice hold/unhold actions
+ * @param diceSize Size of each die
+ */
 @Composable
 private fun DiceRow(
     diceImages: List<Int>,
@@ -125,6 +177,21 @@ private fun DiceRow(
     }
 }
 
+/**
+ * Individual die display component.
+ *
+ * Features:
+ * - Interactive touch handling
+ * - Hold state visualization
+ * - Rolling animation
+ * - Accessibility support
+ *
+ * @param imageResource Resource ID for the die face
+ * @param isHeld Whether the die is currently held
+ * @param isRolling Whether the die is in rolling animation
+ * @param onClick Callback for die interaction
+ * @param size Size of the die
+ */
 @Composable
 fun DiceItem(
     isRolling: Boolean,

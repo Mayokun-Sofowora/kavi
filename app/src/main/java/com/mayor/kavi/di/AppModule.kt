@@ -8,15 +8,14 @@ import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.data.manager.games.*
 import com.mayor.kavi.data.repository.*
 import com.mayor.kavi.di.AppModule.GameScope
-import com.mayor.kavi.util.IoDispatcher
-import com.mayor.kavi.util.NetworkConnection
+import com.mayor.kavi.util.*
+import com.mayor.kavi.R
 import dagger.*
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.*
-import javax.inject.Qualifier
-import javax.inject.Singleton
+import javax.inject.*
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -24,6 +23,10 @@ object AppModule {
     @Qualifier
     @Retention(AnnotationRetention.BINARY)
     annotation class GameScope
+
+    @Retention(AnnotationRetention.BINARY)
+    @Qualifier
+    annotation class IoDispatcher
 
     // Firebase & Core Services
     @Provides
@@ -49,15 +52,6 @@ object AppModule {
     // Repositories
     @Provides
     @Singleton
-    fun provideGameRepository(
-        firestore: FirebaseFirestore,
-        auth: FirebaseAuth,
-        userRepo: UserRepository,
-        @ApplicationContext context: Context
-    ): GameRepository = GameRepositoryImpl(firestore, auth, userRepo, context)
-
-    @Provides
-    @Singleton
     fun provideUserRepository(
         firestore: FirebaseFirestore,
         auth: FirebaseAuth
@@ -67,26 +61,27 @@ object AppModule {
     @Singleton
     fun provideStatisticsRepository(
         firestore: FirebaseFirestore,
-        auth: FirebaseAuth,
-        @ApplicationContext context: Context
-    ): StatisticsRepository = StatisticsRepositoryImpl(firestore, auth, context)
+        auth: FirebaseAuth
+    ): StatisticsRepository = StatisticsRepositoryImpl(firestore, auth)
+
+    @Provides
+    @Singleton
+    fun provideLeaderboardRepository(
+        firestore: FirebaseFirestore
+    ): LeaderboardRepository = LeaderboardRepositoryImpl(firestore)
 
     @Provides
     @Singleton
     fun provideAuthRepository(
-        firebaseAuth: FirebaseAuth, firestore: FirebaseFirestore, userRepository: UserRepository
+        firebaseAuth: FirebaseAuth,
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository
     ): AuthRepository = AuthRepositoryImpl(firebaseAuth, firestore, userRepository)
 
     // Game Managers
     @Provides
     @Singleton
     fun provideDiceManager(): DiceManager = DiceManager()
-
-    @Provides
-    @Singleton
-    fun provideGameSessionManager(
-        gameRepository: GameRepository
-    ): GameSessionManager = GameSessionManager(gameRepository = gameRepository)
 
     @Provides
     @Singleton
@@ -98,8 +93,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideGreedGameManager(
-        statisticsManager: StatisticsManager,
-        diceManager: DiceManager
+        statisticsManager: StatisticsManager
     ): GreedGameManager =
         GreedGameManager(statisticsManager = statisticsManager)
 

@@ -16,9 +16,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.theme.AdlamFont
 import com.mayor.kavi.ui.viewmodel.AppViewModel
+import com.mayor.kavi.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,7 +30,6 @@ fun InterfaceModeScreen(navController: NavController, viewModel: AppViewModel) {
         // Content Layer
         Column(modifier = Modifier.fillMaxSize()) {
             TopBar(navController)
-
             MainContent(navController, viewModel)
         }
     }
@@ -71,13 +70,14 @@ private fun TopBar(navController: NavController) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = "Back",
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
                 )
             }
         },
         actions = {
             IconButton(
-                onClick = { navController.navigate(Routes.InstructionsShort.route + "/1") }
+                onClick = { navController.navigateToInstructions(1) } // Using extension function
             ) {
                 Icon(
                     Icons.Default.Info,
@@ -138,7 +138,7 @@ private fun GameModeSelection(navController: NavController, viewModel: AppViewMo
             imageRes = R.drawable.virtual,
             onClick = {
                 viewModel.setInterfaceMode("ar_mode")
-                navController.navigate(Routes.ArScreen.route)
+//                Toast.makeText(
             }
         )
 
@@ -147,7 +147,7 @@ private fun GameModeSelection(navController: NavController, viewModel: AppViewMo
             imageRes = R.drawable.classic,
             onClick = {
                 viewModel.setInterfaceMode("classic")
-                navController.navigate(Routes.Boards.route)
+                navController.navigateToBoards()
             }
         )
     }

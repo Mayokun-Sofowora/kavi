@@ -4,22 +4,49 @@ import com.mayor.kavi.data.manager.StatisticsManager
 import com.mayor.kavi.data.models.GameScoreState.BalutScoreState
 import com.mayor.kavi.data.models.PlayStyle
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
-import com.mayor.kavi.util.GameMessages
 import com.mayor.kavi.util.ScoreCalculator
 import javax.inject.Inject
 import kotlin.random.Random
 
+/**
+ * Manager class for the Balut dice game variant.
+ *
+ * Balut is a strategic dice game similar to Yahtzee, where players:
+ * - Roll five dice up to three times per turn
+ * - Choose which dice to keep between rolls
+ * - Score in various categories based on dice combinations
+ *
+ * The game proceeds through multiple rounds, with each player
+ * scoring once in each category. The game ends when all categories
+ * are filled, and the player with the highest total score wins.
+ *
+ * @property statisticsManager Manages game statistics and AI behavior analysis
+ */
 class BalutGameManager @Inject constructor(
     private val statisticsManager: StatisticsManager
 ) {
     companion object {
+        /** Maximum number of rolls allowed per turn */
         const val MAX_ROLLS = 3
+
+        /** Available scoring categories in the game */
         val CATEGORIES = setOf(
             "Ones", "Twos", "Threes", "Fours", "Fives", "Sixes",
-            "Full House", "Four of a Kind", "Straight", "Five of a Kind", "Choice"
+            "Full House", "Four of a Kind", "Small Straight", "Large Straight", "Five of a Kind",
+            "Choice"
         )
     }
 
+    /**
+     * Initializes a new Balut game.
+     *
+     * Creates a new game state with:
+     * - Random starting player selection
+     * - Empty score maps for all players
+     * - Initial game parameters (rounds, rolls, etc.)
+     *
+     * @return A new [BalutScoreState] with initial game settings
+     */
     fun initializeGame(): BalutScoreState {
         val startingPlayer = if (Random.nextInt(0, 2) == 0) 0 else AI_PLAYER_ID.hashCode()
         return BalutScoreState(
@@ -32,49 +59,43 @@ class BalutGameManager @Inject constructor(
             maxRounds = CATEGORIES.size,
             rollsLeft = MAX_ROLLS,
             heldDice = emptySet(),
-            message = if (startingPlayer == 0)
-                "You go first! Round 1 of ${CATEGORIES.size}."
-            else
-                "AI goes first! Round 1 of ${CATEGORIES.size}.",
             isGameOver = false
         )
     }
 
+    /**
+     * Handles a turn in the game, processing dice results and updating game state.
+     *
+     * Different handling for:
+     * - Player turns: Manages dice holding and roll counting
+     * - AI turns: Makes strategic decisions about dice selection
+     *
+     * @param diceResults Results of the current dice roll
+     * @param currentState Current state of the game
+     * @param heldDice Set of dice indices that are currently held
+     * @return Updated game state after processing the turn
+     */
     fun handleTurn(
         diceResults: List<Int>, currentState: BalutScoreState, heldDice: Set<Int>
     ): BalutScoreState {
         return if (currentState.currentPlayerIndex == AI_PLAYER_ID.hashCode()) {
             handleAITurn(diceResults, currentState)
         } else {
-            handlePlayerTurn(diceResults, currentState, heldDice)
+            handlePlayerTurn(currentState, heldDice)
         }
     }
 
     private fun handlePlayerTurn(
-        diceResults: List<Int>, currentState: BalutScoreState, heldDice: Set<Int>
+        currentState: BalutScoreState, heldDice: Set<Int>
     ): BalutScoreState {
         if (currentState.rollsLeft <= 0) {
-            return currentState.copy(
-                message = "No rolls left. Please select a category."
-            )
+            return currentState
         }
 
-        val message = buildPlayerTurnMessage(diceResults, currentState.rollsLeft)
         return currentState.copy(
             rollsLeft = currentState.rollsLeft - 1,
-            message = message,
             heldDice = heldDice
         )
-    }
-
-    private fun buildPlayerTurnMessage(diceResults: List<Int>, rollsLeft: Int): String {
-        return buildString {
-            append("Rolled: ${diceResults.joinToString()}")
-            if (rollsLeft > 1 && rollsLeft < 4) append("\n${rollsLeft - 1} rolls left") else append(
-                "\nLast roll!"
-            )
-            append("\nHold dice by clicking them.")
-        }
     }
 
     private fun handleAITurn(
@@ -89,45 +110,42 @@ class BalutGameManager @Inject constructor(
         // AI decides which dice to hold
         val diceToHold = decideAIDiceHolds(diceResults)
 
-        val message = buildAITurnMessage(diceResults, diceToHold, currentState.rollsLeft)
         return currentState.copy(
             rollsLeft = currentState.rollsLeft - 1,
-            message = message,
             heldDice = diceToHold
         )
     }
 
-    private fun buildAITurnMessage(
-        diceResults: List<Int>, heldDice: Set<Int>, rollsLeft: Int
-    ): String {
-        return buildString {
-            append("AI rolled: ${diceResults.joinToString()}")
-            append("\nAI holds: ${heldDice.joinToString { diceResults[it].toString() }}")
-            if (rollsLeft > 1) append("\n$rollsLeft rolls left.") else append("\nAI's last roll!")
-        }
-    }
-
+    /**
+     * Scores a category for the current player.
+     *
+     * This method:
+     * 1. Calculates score for the selected category
+     * 2. Updates player's score map
+     * 3. Advances to next player/round
+     * 4. Checks for game completion
+     *
+     * @param currentState Current state of the game
+     * @param dice Current dice results to score
+     * @param category Category to score in
+     * @return Updated game state after scoring
+     */
     fun scoreCategory(
         currentState: BalutScoreState, dice: List<Int>, category: String
     ): BalutScoreState {
         val currentPlayer = currentState.currentPlayerIndex
-
         // Calculate score for the selected category
-        val score = calculateCategoryScore(dice, category)
+        val score = ScoreCalculator.calculateCategoryScore(dice, category)
 
         // Update player scores
         val updatedScores = currentState.playerScores.toMutableMap()
         updatedScores[currentPlayer] =
             updatedScores[currentPlayer].orEmpty() + (category to score)
-
         // Determine next round and player
         val nextPlayer = if (currentPlayer == 0) AI_PLAYER_ID.hashCode() else 0
         val nextRound =
             if (nextPlayer == 0) currentState.currentRound + 1 else currentState.currentRound
         val isGameOver = checkIfGameOver(updatedScores)
-
-        // Calculate total score for the current player
-        val totalScore = updatedScores[currentPlayer]?.values?.sum() ?: 0
 
         return currentState.copy(
             playerScores = updatedScores,
@@ -135,50 +153,8 @@ class BalutGameManager @Inject constructor(
             currentRound = nextRound,
             rollsLeft = MAX_ROLLS,
             heldDice = emptySet(),
-            message = GameMessages.buildBalutCategoryMessage(
-                dice = dice,
-                category = category,
-                score = score,
-                playerIndex = currentPlayer,
-                isGameOver = isGameOver,
-                totalScore = totalScore
-            ),
             isGameOver = isGameOver
         )
-    }
-
-    private fun calculateCategoryScore(dice: List<Int>, category: String): Int {
-        return when (category) {
-            // Number categories (Ones through Sixes)
-            "Ones" -> dice.count { it == 1 } * 1
-            "Twos" -> dice.count { it == 2 } * 2
-            "Threes" -> dice.count { it == 3 } * 3
-            "Fours" -> dice.count { it == 4 } * 4
-            "Fives" -> dice.count { it == 5 } * 5
-            "Sixes" -> dice.count { it == 6 } * 6
-
-            // Special combinations
-            "Five of a Kind" -> {
-                if (dice.groupBy { it }.any { it.value.size == 5 }) 50 else 0
-            }
-
-            "Four of a Kind" -> {
-                if (dice.groupBy { it }.any { it.value.size >= 4 }) 40 else 0
-            }
-
-            "Full House" -> {
-                val groups = dice.groupBy { it }
-                if (groups.size == 2 && groups.values.any { it.size == 3 }) 35 else 0
-            }
-
-            "Straight" -> {
-                val sorted = dice.sorted()
-                if (sorted.windowed(2).all { (a, b) -> b - a == 1 }) 30 else 0
-            }
-
-            "Choice" -> dice.sum()
-            else -> 0
-        }
     }
 
     private fun checkIfGameOver(updatedScores: Map<Int, Map<String, Int>>): Boolean {
@@ -221,17 +197,89 @@ class BalutGameManager @Inject constructor(
         }.toSet()
     }
 
+    /**
+     * Determines the optimal category choice for the AI player.
+     *
+     * Analyzes current dice results and available categories to make
+     * the most strategic scoring decision.
+     *
+     * @param diceResults Current dice results to analyze
+     * @param currentState Current game state
+     * @return The chosen category name
+     */
     fun chooseAICategory(diceResults: List<Int>, currentState: BalutScoreState): String {
-        // Get available categories
-        val usedCategories = currentState.playerScores[AI_PLAYER_ID.hashCode()] ?: emptyMap()
-        val availableCategories = CATEGORIES - usedCategories.keys
+        val aiScores = currentState.playerScores[AI_PLAYER_ID.hashCode()] ?: emptyMap()
+        val availableCategories = CATEGORIES.filter { it !in aiScores }
+        if (availableCategories.isEmpty()) return "Choice"
 
         // Calculate scores for each available category
-        val categoryScores = availableCategories.map { category ->
-            category to calculateCategoryScore(diceResults, category)
+        val categoryScores = availableCategories.associateWith { category ->
+            val baseScore = ScoreCalculator.calculateCategoryScore(diceResults, category)
+            when (category) {
+                // Prioritize high-value categories
+                "Five of a Kind" -> if (baseScore > 0) baseScore * 2.0 else 0.0
+                "Large Straight" -> if (baseScore > 0) baseScore * 1.8 else 0.0
+                "Small Straight" -> if (baseScore > 0) baseScore * 1.6 else 0.0
+                "Four of a Kind" -> if (baseScore > 0) baseScore * 1.5 else 0.0
+                "Full House" -> if (baseScore > 0) baseScore * 1.4 else 0.0
+                
+                // Number categories - prioritize based on count
+                "Ones" -> {
+                    val count = diceResults.count { it == 1 }
+                    weightNumberCategory(baseScore, count)
+                }
+                "Twos" -> {
+                    val count = diceResults.count { it == 2 }
+                    weightNumberCategory(baseScore, count)
+                }
+                "Threes" -> {
+                    val count = diceResults.count { it == 3 }
+                    weightNumberCategory(baseScore, count)
+                }
+                "Fours" -> {
+                    val count = diceResults.count { it == 4 }
+                    weightNumberCategory(baseScore, count)
+                }
+                "Fives" -> {
+                    val count = diceResults.count { it == 5 }
+                    weightNumberCategory(baseScore, count)
+                }
+                "Sixes" -> {
+                    val count = diceResults.count { it == 6 }
+                    weightNumberCategory(baseScore, count)
+                }
+                
+                // Choice is last resort, but weight based on total
+                "Choice" -> {
+                    val total = diceResults.sum()
+                    when {
+                        total >= 20 -> baseScore * 1.2  // Good choice score
+                        total >= 15 -> baseScore * 1.0  // Average choice score
+                        else -> baseScore * 0.8         // Poor choice score
+                    }
+                }
+                else -> baseScore.toDouble()
+            }
         }
 
-        // Choose the highest scoring available category
-        return categoryScores.maxByOrNull { it.second }?.first ?: availableCategories.first()
+        // Consider game state for final decision
+        val roundsLeft = CATEGORIES.size - currentState.currentRound
+        val bestCategory = categoryScores.maxByOrNull { it.value }?.key ?: availableCategories.first()
+        
+        // If near end game and haven't used Choice, prefer it for good rolls
+        if (roundsLeft <= 2 && "Choice" in availableCategories && diceResults.sum() >= 20) {
+            return "Choice"
+        }
+        
+        return bestCategory
+    }
+
+    private fun weightNumberCategory(baseScore: Int, count: Int): Double {
+        return when (count) {
+            5 -> baseScore * 1.5  // Perfect number category
+            4 -> baseScore * 1.3  // Very good
+            3 -> baseScore * 1.2  // Good
+            else -> baseScore.toDouble()
+        }
     }
 }

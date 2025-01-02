@@ -34,38 +34,12 @@ class UserRepositoryImpl @Inject constructor(
                 if (profile != null) {
                     Result.Success(profile)
                 } else {
-                    // If profile parsing fails, create a default profile
-                    val defaultProfile = UserProfile(
-                        id = userId,
-                        name = "Player",
-                        email = "",
-                        avatar = Avatar.DEFAULT,
-                        lastSeen = System.currentTimeMillis()
-                    )
-                    // Save the default profile
-                    firestore
-                        .collection(COLLECTION_USERS)
-                        .document(userId)
-                        .set(defaultProfile)
-                        .await()
-                    Result.Success(defaultProfile)
+                    Timber.e("Failed to parse user profile for ID: $userId")
+                    Result.Error("Failed to parse user profile")
                 }
             } else {
-                // If document doesn't exist, create a default profile
-                val defaultProfile = UserProfile(
-                    id = userId,
-                    name = "Player",
-                    email = "",
-                    avatar = Avatar.DEFAULT,
-                    lastSeen = System.currentTimeMillis()
-                )
-                // Save the default profile
-                firestore
-                    .collection(COLLECTION_USERS)
-                    .document(userId)
-                    .set(defaultProfile)
-                    .await()
-                Result.Success(defaultProfile)
+                Timber.e("No user profile found for ID: $userId")
+                Result.Error("User profile not found")
             }
         } catch (e: Exception) {
             Timber.e(e, "Error getting user profile")
@@ -83,20 +57,8 @@ class UserRepositoryImpl @Inject constructor(
                 .await()
 
             if (!userDoc.exists()) {
-                // Create a default profile if it doesn't exist
-                val defaultProfile = UserProfile(
-                    id = userId,
-                    name = "Player",
-                    email = "",
-                    avatar = Avatar.DEFAULT,
-                    lastSeen = System.currentTimeMillis(),
-                    isOnline = isOnline
-                )
-                firestore
-                    .collection(COLLECTION_USERS)
-                    .document(userId)
-                    .set(defaultProfile)
-                    .await()
+                Timber.e("No user profile found for ID: $userId")
+                Result.Error("User profile not found")
             } else {
                 // Update online status
                 firestore
@@ -109,9 +71,9 @@ class UserRepositoryImpl @Inject constructor(
                         )
                     )
                     .await()
+                
+                Result.Success(Unit)
             }
-            
-            Result.Success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Error updating user online status")
             Result.Error("Error updating user online status", e)
@@ -152,23 +114,30 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun updateUserProfile(profile: UserProfile): Result<UserProfile> =
         try {
-            Timber.d("Updating user profile for user: ${profile.id}")
+            val userId = getCurrentUserId() ?: throw Exception("User not authenticated")
+            Timber.d("Updating user profile for user: $userId")
+            
             val userProfile = firestore
                 .collection(COLLECTION_USERS)
-                .document(profile.id)
+                .document(userId)
             
-            // Use merge option to update only the specified fields
+            // Update all profile fields except id
             val updates = mapOf(
                 "name" to profile.name,
+                "email" to profile.email,
                 "avatar" to profile.avatar,
-                "lastSeen" to System.currentTimeMillis()
+                "lastSeen" to System.currentTimeMillis(),
+                "isOnline" to profile.isOnline,
+                "isInGame" to profile.isInGame,
+                "isWaitingForPlayers" to profile.isWaitingForPlayers,
+                "currentGameId" to profile.currentGameId
             )
             
             userProfile.set(updates, SetOptions.merge())
                 .await()
             
-            Timber.i("Successfully updated user profile for: ${profile.id}")
-            Result.Success(profile)
+            Timber.i("Successfully updated user profile for: $userId")
+            Result.Success(profile.copy(id = userId))
         } catch (e: Exception) {
             Timber.e(e, "Error updating user profile")
             Result.Error("Error updating user profile", e)

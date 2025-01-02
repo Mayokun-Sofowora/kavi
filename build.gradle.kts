@@ -1,10 +1,5 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
-    repositories {
-        google()
-        mavenCentral()
-        maven ("https://oss.sonatype.org/content/repositories/snapshots/")
-    }
     dependencies {
         classpath("com.google.gms:google-services:4.3.15")
         classpath("com.google.dagger:hilt-android-gradle-plugin:2.51.1")
@@ -22,4 +17,8 @@ plugins {
     id("com.google.devtools.ksp") version "2.0.21-1.0.27" apply false
     id("org.jetbrains.dokka") version "1.9.20" apply false
     id("com.google.firebase.crashlytics") version "2.9.5" apply false
+}
+
+tasks.register("clean", Delete::class) {
+    delete(layout.buildDirectory)
 }

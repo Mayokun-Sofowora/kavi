@@ -18,11 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.*
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,9 +28,9 @@ import androidx.lifecycle.*
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.util.*
-import com.mayor.kavi.util.GameBoard
 import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.data.models.*
+import com.mayor.kavi.ui.components.AnalyticsDashboard
 import com.mayor.kavi.ui.viewmodel.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -44,6 +42,7 @@ fun StatisticsScreen(
     gameViewModel: GameViewModel = hiltViewModel(),
     navController: NavController,
 ) {
+    var showAnalytics by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val statisticsManager = StatisticsManager.LocalStatisticsManager.current
     val connectivityManager =
@@ -63,14 +62,18 @@ fun StatisticsScreen(
         }
     } ?: 0L
 
+    // Only reload profile if we don't have it or if there was an error
     LaunchedEffect(Unit) {
-        appViewModel.loadUserProfile()
+        val currentState = appViewModel.userProfileState.value
+        if (currentState !is Result.Success && currentState !is Result.Loading) {
+            appViewModel.loadUserProfile()
+        }
     }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Statistics") },
+                title = { Text(if (showAnalytics) "Analytics" else "Statistics") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
@@ -85,6 +88,17 @@ fun StatisticsScreen(
                     titleContentColor = colorResource(id = R.color.on_primary_container)
                 ),
                 actions = {
+                    // Toggle Analytics Button
+                    IconButton(onClick = { showAnalytics = !showAnalytics }) {
+                        Icon(
+                            imageVector = if (showAnalytics)
+                                Icons.Default.QueryStats
+                            else
+                                Icons.Default.Analytics,
+                            contentDescription = if (showAnalytics) "Show Statistics" else "Show Analytics"
+                        )
+                    }
+                    // Network Status Icon
                     Icon(
                         imageVector = if (isConnected)
                             Icons.Default.SignalWifi4Bar
@@ -97,87 +111,115 @@ fun StatisticsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = padding,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                when (val state =
-                    userProfileState) { // smart casting; smartcast may have been useless
-                    is Result.Success -> {
-                        UserProfileCard(
-                            profile = state.data,
-                            onProfileChange = { appViewModel.updateUserProfile(it) }
-                        )
-                    }
-
-                    is Result.Error -> {
-                        ErrorContent(
-                            message = state.message,
-                            onRetry = { appViewModel.loadUserProfile() }
-                        )
-                    }
-
-                    is Result.Loading -> {
-                        // Use the preserved data during loading
-                        state.data?.let { profile ->
+        if (showAnalytics) {
+            AnalyticsDashboard(
+                modifier = Modifier.padding(padding)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = padding,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    when (val state = userProfileState) {
+                        is Result.Success -> {
                             UserProfileCard(
-                                profile = profile,
+                                profile = state.data,
                                 onProfileChange = { appViewModel.updateUserProfile(it) }
                             )
                         }
-                        Timber.d("Loading user profile...")
-                    }
 
-                    else -> Timber.d("Unknown statistics screen state: $state")
-                }
-            }
-
-            if (userProfileState is Result.Success) {
-                item { OverallStatsCard(gameStats!!, overallWinRate) }
-                item { PlayerAnalysisGraph(playerAnalysis) }
-                item { GameStatsTable(gameStats!!) }
-                item { PlayerAnalysisCard(playerAnalysis) }
-                item {
-                    ClearUserStatsButton {
-                        gameViewModel.viewModelScope.launch {
-                            // Reset profile to defaults
-                            val defaultProfile = (userProfileState as? Result.Success)?.data?.copy(
-                                name = "Player",
-                                avatar = Avatar.DEFAULT
+                        is Result.Error -> {
+                            ErrorContent(
+                                message = state.message,
+                                onRetry = { appViewModel.loadUserProfile() }
                             )
-                            defaultProfile?.let { profile ->
-                                appViewModel.updateUserProfile(profile)
-                                Toast.makeText(
-                                    context,
-                                    "Profile reset to defaults",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                        }
+
+                        is Result.Loading -> {
+                            state.data?.let { profile ->
+                                UserProfileCard(
+                                    profile = profile,
+                                    onProfileChange = { appViewModel.updateUserProfile(it) }
+                                )
+                            }
+                            Timber.d("Loading user profile...")
+                        }
+
+                        else -> Timber.d("Unknown statistics screen state: $state")
+                    }
+                }
+
+                if (userProfileState is Result.Success) {
+                    val currentStats = gameStats
+                    if (currentStats != null) {
+                        item { OverallStatsCard(currentStats, overallWinRate) }
+                        item { PlayerAnalysisGraph(playerAnalysis) }
+                        item { PlayerAnalysisCard(playerAnalysis) }
+                        item {
+                            ResetStatsButton {
+                                gameViewModel.viewModelScope.launch {
+                                    statisticsManager.clearUserStatistics()
+                                    Toast.makeText(
+                                        context,
+                                        "Statistics have been reset",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "No statistics available yet",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = "Play some games to see your statistics!",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                }
                             }
                         }
                     }
+                } else if (userProfileState is Result.Loading) {
+                    item { CircularProgressIndicator() }
                 }
-            } else if (userProfileState is Result.Loading) {
-                item { CircularProgressIndicator() }
             }
         }
     }
 }
 
 @Composable
-fun ClearUserStatsButton(onClick: () -> Unit) {
+private fun ResetStatsButton(onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = colorResource(id = R.color.primary),
-            contentColor = colorResource(id = R.color.buttonTextColor)
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError
         ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        Text("Reset Profile")
+        Icon(
+            imageVector = Icons.Default.RestartAlt,
+            contentDescription = null,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Text("Reset Statistics")
     }
 }
 
@@ -402,73 +444,6 @@ private fun PlayerAnalysisGraph(analysis: PlayerAnalysis?) {
 }
 
 @Composable
-private fun GameStatsTable(gameStats: GameStatistics) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Game Statistics", style = MaterialTheme.typography.headlineMedium)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TableHeader("Game")
-                TableHeader("Played")
-                TableHeader("Win Rate")
-                TableHeader("High Score")
-            }
-
-            GameBoard.entries
-                .filter { it != GameBoard.CUSTOM }  // Filter out CUSTOM game mode
-                .forEach { board ->
-                    val stats = gameStats.winRates[board.modeName]
-                    val highScore = gameStats.highScores[board.modeName]
-
-                    GameStatRow(
-                        gameName = board.modeName,
-                        gamesPlayed = stats?.total ?: 0,
-                        winRate = if (stats != null && stats.total > 0) {
-                            ((stats.wins.toFloat() / stats.total.toFloat()) * 100).toInt()
-                        } else 0,
-                        highScore = highScore ?: 0
-                    )
-                }
-        }
-    }
-}
-
-@Composable
-private fun TableHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(8.dp)
-    )
-}
-
-@Composable
-private fun GameStatRow(
-    gameName: String,
-    gamesPlayed: Int,
-    winRate: Int,
-    highScore: Int
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(gameName, modifier = Modifier.padding(8.dp))
-        Text(gamesPlayed.toString(), modifier = Modifier.padding(8.dp))
-        Text("$winRate%", modifier = Modifier.padding(8.dp))
-        Text(highScore.toString(), modifier = Modifier.padding(8.dp))
-    }
-}
-
-@Composable
 private fun UserProfileCard(
     profile: UserProfile,
     onProfileChange: (UserProfile) -> Unit
@@ -476,6 +451,7 @@ private fun UserProfileCard(
     var showAvatarDialog by remember { mutableStateOf(false) }
     var editedUsername by remember { mutableStateOf(profile.name) }
     var isEditing by remember { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -526,6 +502,24 @@ private fun UserProfileCard(
                     modifier = Modifier
                         .padding(vertical = 8.dp)
                         .clickable { isEditing = true }
+                )
+            }
+
+            // Delete Account Button
+            Button(
+                onClick = { showDeleteConfirmation = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
                 )
             }
         }
@@ -588,10 +582,7 @@ private fun OverallStatsCard(gameStats: GameStatistics, overallWinRate: Long) {
 
 @Composable
 private fun StatCircle(
-    value: Long,
-    label: String,
-    suffix: String = "",
-    color: Color
+    value: Long, label: String, suffix: String = "", color: Color
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
@@ -623,9 +614,7 @@ private fun StatCircle(
 
 @Composable
 private fun AvatarSelection(
-    currentAvatar: Avatar,
-    onAvatarSelected: (Avatar) -> Unit,
-    onDismiss: () -> Unit
+    currentAvatar: Avatar, onAvatarSelected: (Avatar) -> Unit, onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -664,3 +653,4 @@ private fun AvatarSelection(
         }
     )
 }
+

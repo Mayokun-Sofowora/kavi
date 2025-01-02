@@ -14,15 +14,13 @@ import com.mayor.kavi.data.manager.games.MyGameManager
 import com.mayor.kavi.data.models.GameScoreState
 import com.mayor.kavi.ui.components.DiceDisplay
 import com.mayor.kavi.ui.viewmodel.GameViewModel
-import com.mayor.kavi.util.GameBoard
+import com.mayor.kavi.util.*
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.*
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalFocusManager
@@ -31,8 +29,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
-import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.util.BoardColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +36,7 @@ fun BoardFourScreen(
     viewModel: GameViewModel = hiltViewModel(),
     navController: NavController
 ) {
+    val selectedBoard by viewModel.selectedBoard.collectAsState()
     val gameState = viewModel.gameState.collectAsState()
     val isRolling by viewModel.isRolling.collectAsState()
     val diceImages by viewModel.diceImages.collectAsState()
@@ -54,9 +51,11 @@ fun BoardFourScreen(
     val boardColor by settingsManager.getBoardColor().collectAsState(initial = "default")
 
     // Initialize game state when the screen is first loaded
-    LaunchedEffect(Unit) {
-        viewModel.setSelectedBoard(GameBoard.CUSTOM.modeName)
-        viewModel.resetGame()
+    LaunchedEffect(selectedBoard) {
+        if (selectedBoard != GameBoard.CUSTOM.modeName) {
+            viewModel.setSelectedBoard(GameBoard.CUSTOM.modeName)
+            viewModel.resetGame()
+        }
     }
 
     DisposableEffect(Unit) {
@@ -114,7 +113,7 @@ fun BoardFourScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
-                        onClick = { navController.navigate(Routes.Settings.route) },
+                        onClick = { navController.navigateToSettings() },
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
@@ -408,7 +407,7 @@ private fun PlayerManagementCard(
                 Text("Players", style = MaterialTheme.typography.titleMedium)
                 Button(
                     onClick = onAddPlayer,
-                    enabled = customState.playerCount < MyGameManager.MAX_PLAYERS,
+                    enabled = customState.playerScores.size < MyGameManager.MAX_PLAYERS,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colorResource(id = R.color.primary),
                         contentColor = colorResource(id = R.color.on_primary)
@@ -445,7 +444,7 @@ private fun PlayerManagementCard(
                 OutlinedTextField(
                     value = if (isEditing) tempPlayerName else newPlayerName,
                     onValueChange = { tempPlayerName = it },
-                    label = { Text("Rename Player") },
+                    label = { Text("Player Name") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .onFocusChanged { focusState ->

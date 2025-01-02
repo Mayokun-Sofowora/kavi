@@ -1,6 +1,7 @@
 package com.mayor.kavi.data.models
 
 import com.mayor.kavi.R
+import kotlinx.serialization.Serializable
 
 data class UserProfile(
     val id: String = "",
@@ -14,15 +15,16 @@ data class UserProfile(
     val currentGameId: String = ""
 )
 
+@Serializable
 enum class Avatar(val resourceId: Int) {
-    GIRL1(R.drawable.avatar_girl1),
-    GIRL2(R.drawable.avatar_girl2),
-    GIRL3(R.drawable.avatar_girl3),
-    GIRL4(R.drawable.avatar_girl4),
-    BOY1(R.drawable.avatar_boy1),
-    BOY2(R.drawable.avatar_boy2),
-    BOY3(R.drawable.avatar_boy3),
-    BOY4(R.drawable.avatar_boy4),
-    BOY5(R.drawable.avatar_boy5),
+    AVATAR1(R.drawable.avatar_girl1),
+    AVATAR2(R.drawable.avatar_girl2),
+    AVATAR3(R.drawable.avatar_girl3),
+    AVATAR4(R.drawable.avatar_girl4),
+    AVATAR5(R.drawable.avatar_boy1),
+    AVATAR6(R.drawable.avatar_boy2),
+    AVATAR7(R.drawable.avatar_boy3),
+    AVATAR8(R.drawable.avatar_boy4),
+    AVATAR9(R.drawable.avatar_boy5),
     DEFAULT(R.drawable.default_avatar),
 }

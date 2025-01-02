@@ -15,8 +15,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.*
 import com.mayor.kavi.ui.viewmodel.*
 import com.mayor.kavi.R
+import com.mayor.kavi.ui.Screen
 import com.mayor.kavi.util.GameBoard
-import com.mayor.kavi.ui.Routes
+import com.mayor.kavi.util.navigateToBoard
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,11 +96,7 @@ fun BoardsScreen(
                 onClick = {
                     selectedGameMode?.let {
                         viewModel.setSelectedBoard(it)
-                        if (it == GameBoard.GREED.modeName) {
-                            navController.navigate(Routes.PlayMode.route)
-                        } else {
-                            navigateToBoard(viewModel, navController)
-                        }
+                        navigateToBoard(viewModel, navController)
                     }
                 },
                 enabled = selectedGameMode != null,
@@ -184,13 +181,11 @@ private fun BoardSelectionCard(
 }
 
 private fun navigateToBoard(gameViewModel: GameViewModel, navController: NavController) {
-    Timber.tag("Navigation")
-        .d("GameMode: ${gameViewModel.playMode.value}, SelectedBoard: ${gameViewModel.selectedBoard.value}")
     when (gameViewModel.selectedBoard.value) {
-        GameBoard.PIG.modeName -> navController.navigate(Routes.BoardOne.route)
-        GameBoard.GREED.modeName -> navController.navigate(Routes.PlayMode.route)
-        GameBoard.BALUT.modeName -> navController.navigate(Routes.BoardThree.route)
-        GameBoard.CUSTOM.modeName -> navController.navigate(Routes.BoardFour.route)
+        GameBoard.PIG.modeName -> navController.navigateToBoard(Screen.Board.One)
+        GameBoard.GREED.modeName -> navController.navigateToBoard(Screen.Board.Two)
+        GameBoard.BALUT.modeName -> navController.navigateToBoard(Screen.Board.Three)
+        GameBoard.CUSTOM.modeName -> navController.navigateToBoard(Screen.Board.Four)
         else -> Timber.tag("Navigation").d("No matching board for SinglePlayer mode")
     }
 }

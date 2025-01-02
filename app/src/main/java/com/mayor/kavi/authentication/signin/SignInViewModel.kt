@@ -2,18 +2,19 @@ package com.mayor.kavi.authentication.signin
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.navigation.NavController
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.AuthResult
 import com.mayor.kavi.data.repository.AuthRepository
-import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.ui.viewmodel.AppViewModel
+import com.mayor.kavi.data.repository.UserRepository
 import com.mayor.kavi.util.Result.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.mayor.kavi.util.Result
+import com.mayor.kavi.data.models.UserProfile
+import com.google.firebase.auth.GoogleAuthProvider
 
 data class SignInState(
     val isLoading: Boolean = false,
@@ -23,7 +24,8 @@ data class SignInState(
 
 @HiltViewModel
 class SignInViewModel @Inject constructor(
-    private val repository: AuthRepository
+    private val repository: AuthRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _signInState = MutableStateFlow(SignInState())
@@ -32,64 +34,82 @@ class SignInViewModel @Inject constructor(
     fun signIn(
         email: String,
         password: String,
-        navController: NavController,
-        appViewModel: AppViewModel
     ) = viewModelScope.launch {
+        // Input validation
+        if (!validateInput(email, password)) return@launch
         _signInState.value = SignInState(isLoading = true)
         repository.signInUser(email, password).collect { result ->
-            _signInState.value = when (result) {
-                is Success -> {
-                    appViewModel.onLoginComplete()
-                    navController.navigate(Routes.MainMenu.route)
-                    SignInState(isLoading = false, toastMessage = "Sign in successful")
-                }
-                is Loading -> SignInState(isLoading = true)
-                is Error -> {
-                    appViewModel.onLoginCancel()
-                    SignInState(
-                        isLoading = false,
-                        toastMessage = result.message
-                    )
-                }
-            }
+            handleSignInResult(result)
         }
     }
 
     fun googleSignIn(
-        credential: AuthCredential,
-        appViewModel: AppViewModel
+        credential: AuthCredential
     ) = viewModelScope.launch {
         _signInState.value = SignInState(isLoading = true)
         repository.googleSignIn(credential).collect { result ->
-            when (result) {
-                is Success -> {
+            handleSignInResult(result)
+        }
+    }
+
+    private fun handleSignInResult(
+        result: Result<AuthResult>
+    ) {
+        when (result) {
+            is Success -> {
+                val user = result.data.user
+                if (user != null && !user.isEmailVerified && 
+                    user.providerData.none { it.providerId == GoogleAuthProvider.PROVIDER_ID }) {
+                    // Email user that hasn't verified their email
+                    _signInState.value = SignInState(
+                        isLoading = false,
+                        toastMessage = "Please verify your email before signing in. Check your inbox for the verification link."
+                    )
+                } else {
                     _signInState.value = SignInState(
                         isLoading = false,
                         isAuthSuccess = result.data,
-                        toastMessage = "Google sign-in successful"
+                        toastMessage = "Sign in successful"
                     )
-                    appViewModel.onLoginComplete()
                 }
+            }
 
-                is Loading -> {
-                    _signInState.value = SignInState(isLoading = true)
-                }
+            is Loading -> {
+                _signInState.value = SignInState(isLoading = true)
+            }
 
-                is Error -> {
-                    _signInState.value = SignInState(
-                        isLoading = false,
-                        toastMessage = "Google sign-in failed: ${result.message}"
-                    )
-                    appViewModel.onLoginCancel()
-                }
+            is Error -> {
+                _signInState.value = SignInState(
+                    isLoading = false,
+                    toastMessage = result.message
+                )
             }
         }
     }
 
-    fun updateSignInStateWithError(message: String) {
-        _signInState.value = SignInState(
-            isLoading = false,
-            toastMessage = message
-        )
+    suspend fun getUserProfile(userId: String): UserProfile? {
+        return when (val result = userRepository.getUserById(userId)) {
+            is Success -> result.data
+            else -> null
+        }
     }
+
+    private fun validateInput(email: String, password: String): Boolean {
+        if (email.isBlank() || password.isBlank()) {
+            _signInState.value = SignInState(
+                isLoading = false,
+                toastMessage = "Email and password are required"
+            )
+            return false
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            _signInState.value = SignInState(
+                isLoading = false,
+                toastMessage = "Invalid email format"
+            )
+            return false
+        }
+        return true
+    }
+
 }

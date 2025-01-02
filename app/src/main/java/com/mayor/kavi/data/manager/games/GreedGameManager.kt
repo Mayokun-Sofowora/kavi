@@ -4,19 +4,44 @@ import com.mayor.kavi.data.manager.StatisticsManager
 import com.mayor.kavi.data.models.GameScoreState.GreedScoreState
 import com.mayor.kavi.data.models.PlayStyle
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
-import com.mayor.kavi.util.GameMessages.buildGreedScoreMessage
 import com.mayor.kavi.util.ScoreCalculator
 import javax.inject.Inject
 import kotlin.random.Random
 
+/**
+ * Manager class for the Greed dice game variant.
+ * 
+ * Greed is a dice game where players roll multiple dice and try to accumulate points
+ * through various scoring combinations. Players can:
+ * - Roll dice and select which ones to keep
+ * - Bank their accumulated points
+ * - Risk losing points if no scoring dice are rolled
+ *
+ * The game ends when a player reaches or exceeds [WINNING_SCORE] points.
+ * Players must achieve a minimum score of [MINIMUM_STARTING_SCORE] to start banking points.
+ *
+ * @property statisticsManager Manages game statistics and AI behavior analysis
+ */
 class GreedGameManager @Inject constructor(
     private val statisticsManager: StatisticsManager
 ) {
     companion object {
+        /** Score required to win the game */
         const val WINNING_SCORE = 10000
+        /** Minimum score required to start banking points */
         const val MINIMUM_STARTING_SCORE = 800
     }
 
+    /**
+     * Initializes a new Greed game.
+     * 
+     * Creates a new game state with:
+     * - Random starting player selection
+     * - Zero scores for both players
+     * - Initial game parameters
+     *
+     * @return A new [GreedScoreState] with initial game settings
+     */
     fun initializeGame(): GreedScoreState {
         val startingPlayer = if (Random.nextBoolean()) 0 else AI_PLAYER_ID.hashCode()
         return GreedScoreState(
@@ -25,20 +50,31 @@ class GreedGameManager @Inject constructor(
                 AI_PLAYER_ID.hashCode() to 0
             ),
             currentPlayerIndex = startingPlayer,
-            message = if (startingPlayer == 0) "You go first!" else "AI goes first!",
             isGameOver = false,
-            turnScore = 0,
+            currentTurnScore = 0,
             canReroll = true,
             lastRoll = emptyList()
         )
     }
 
+    /**
+     * Handles a turn in the game, processing dice results and updating game state.
+     * 
+     * Different handling for:
+     * - Player turns: Processes held dice and scoring combinations
+     * - AI turns: Makes strategic decisions about dice selection and banking
+     *
+     * @param diceResults Results of the current dice roll
+     * @param currentState Current state of the game
+     * @param heldDice Set of dice indices that are currently held
+     * @return Updated game state after processing the turn
+     */
     fun handleTurn(
         diceResults: List<Int>, currentState: GreedScoreState, heldDice: Set<Int>
     ): GreedScoreState {
         return when (currentState.currentPlayerIndex) {
-            0 -> handlePlayerTurn(currentState, diceResults, heldDice)
             AI_PLAYER_ID.hashCode() -> handleAITurn(diceResults, currentState)
+            0 -> handlePlayerTurn(currentState, diceResults, heldDice)
             else -> currentState
         }
     }
@@ -47,13 +83,12 @@ class GreedGameManager @Inject constructor(
         currentState: GreedScoreState, diceResults: List<Int>, heldDice: Set<Int>
     ): GreedScoreState {
         if (!currentState.canReroll) {
-            return currentState.copy(message = "You can't reroll after banking your score.")
+            return currentState
         }
 
         // If all dice are held, player must bank or risk losing points
         if (heldDice.size == diceResults.size) {
             return currentState.copy(
-                message = "All dice are held. You must bank your score or risk losing it!",
                 canReroll = false,
                 heldDice = heldDice  // Preserve held dice so UI can show them
             )
@@ -62,8 +97,7 @@ class GreedGameManager @Inject constructor(
         // If previous roll was hot dice and player didn't reroll all dice, they bust
         if (currentState.scoringDice.isEmpty() && currentState.heldDice.isNotEmpty()) {
             return currentState.copy(
-                turnScore = 0,
-                message = "Reroll all dice when you get hot dice! You lose all points for this turn.",
+                currentTurnScore = 0,
                 heldDice = emptySet(),
                 scoringDice = emptySet(),
                 lastRoll = diceResults,
@@ -75,7 +109,6 @@ class GreedGameManager @Inject constructor(
         val availableDice = diceResults.indices.toSet() - currentState.heldDice - currentState.scoringDice
         if (availableDice.isEmpty()) {
             return currentState.copy(
-                message = "No dice available to roll. Bank your score or risk losing it!",
                 canReroll = false,
                 heldDice = heldDice  // Preserve held dice so UI can show them
             )
@@ -87,8 +120,7 @@ class GreedGameManager @Inject constructor(
         // If no scoring dice in new roll, lose all accumulated points
         if (scoringDice.isEmpty()) {
             return currentState.copy(
-                turnScore = 0,
-                message = "Bust! You lost all accumulated points for this turn.",
+                currentTurnScore = 0,
                 heldDice = emptySet(),
                 scoringDice = emptySet(),
                 lastRoll = diceResults,
@@ -96,14 +128,7 @@ class GreedGameManager @Inject constructor(
             )
         }
 
-        val newTurnScore = currentState.turnScore + score
-        val message = buildGreedScoreMessage(
-            dice = diceResults,
-            score = score,
-            turnScore = newTurnScore,
-            playerIndex = currentState.currentPlayerIndex,
-            roundHistory = currentState.roundHistory
-        )
+        val newTurnScore = currentState.currentTurnScore + score
 
         // Map scoring dice to original indices
         val newScoringDiceIndices = scoringDice.map { availableDice.elementAt(it) }.toSet()
@@ -118,12 +143,7 @@ class GreedGameManager @Inject constructor(
 
         return currentState.copy(
             heldDice = finalHeldDice,
-            message = when {
-                allDiceScoring -> "$message\nHot dice! Reroll all dice!"
-                allDiceWillBeHeld -> "$message\nAll dice held. Bank your score or risk losing it!"
-                else -> message
-            },
-            turnScore = newTurnScore,
+            currentTurnScore = newTurnScore,
             lastRoll = diceResults,
             scoringDice = finalScoringDice,
             canReroll = !allDiceWillBeHeld  // Disable reroll if all dice will be held
@@ -148,8 +168,7 @@ class GreedGameManager @Inject constructor(
         // If no scoring dice in new roll, lose all accumulated points
         if (scoringDice.isEmpty()) {
             return currentState.copy(
-                turnScore = 0,
-                message = "AI busts! Lost all accumulated points for this turn. Your turn!",
+                currentTurnScore = 0,
                 heldDice = emptySet(),
                 scoringDice = emptySet(),
                 lastRoll = diceResults,
@@ -158,7 +177,7 @@ class GreedGameManager @Inject constructor(
             )
         }
 
-        val newTurnScore = currentState.turnScore + score
+        val newTurnScore = currentState.currentTurnScore + score
         val newScoringDiceIndices = scoringDice.map { availableDice.elementAt(it) }.toSet()
         
         // Check for hot dice (all dice scoring)
@@ -168,22 +187,14 @@ class GreedGameManager @Inject constructor(
 
         // AI decision to bank or continue
         val shouldBank = shouldAIBank(newTurnScore, currentState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0)
-        if (shouldBank && !allDiceScoring) {
-            return bankScore(currentState.copy(turnScore = newTurnScore))
-        }
 
-        val message = buildGreedScoreMessage(
-            dice = diceResults,
-            score = score,
-            turnScore = newTurnScore,
-            playerIndex = currentState.currentPlayerIndex,
-            roundHistory = currentState.roundHistory
-        ) + if (allDiceScoring) "\nAI got hot dice! Re-rolling all dice!" else ""
+        if (shouldBank && !allDiceScoring) {
+            return bankScore(currentState.copy(currentTurnScore = newTurnScore))
+        }
 
         return currentState.copy(
             heldDice = finalHeldDice,
-            message = message,
-            turnScore = newTurnScore,
+            currentTurnScore = newTurnScore,
             lastRoll = diceResults,
             scoringDice = finalScoringDice,
             canReroll = true
@@ -216,34 +227,35 @@ class GreedGameManager @Inject constructor(
         return Random.nextDouble() > adjustedThreshold
     }
 
+    /**
+     * Banks the current turn's score for the active player.
+     * 
+     * This method:
+     * 1. Validates if banking is allowed (minimum score requirement)
+     * 2. Updates player's total score
+     * 3. Switches to next player
+     * 4. Checks for game completion
+     *
+     * @param currentState Current state of the game
+     * @return Updated game state after banking the score
+     */
     fun bankScore(currentState: GreedScoreState): GreedScoreState {
         val currentScore = currentState.playerScores[currentState.currentPlayerIndex] ?: 0
-        val canBank = currentState.turnScore >= MINIMUM_STARTING_SCORE || currentScore > 0
+        val canBank = currentState.currentTurnScore >= MINIMUM_STARTING_SCORE || currentScore > 0
 
         val updatedScores = currentState.playerScores.toMutableMap()
         if (canBank) {
-            updatedScores[currentState.currentPlayerIndex] = currentScore + currentState.turnScore
+            updatedScores[currentState.currentPlayerIndex] = currentScore + currentState.currentTurnScore
         }
 
         val nextPlayer = if (currentState.currentPlayerIndex == 0) AI_PLAYER_ID.hashCode() else 0
         val isGameOver = checkIfGameOver(updatedScores)
 
-        val message = if (isGameOver) {
-            if (currentState.currentPlayerIndex == 0) "You win with ${updatedScores[currentState.currentPlayerIndex]} points!"
-            else "AI wins with ${updatedScores[currentState.currentPlayerIndex]} points!"
-        } else if (!canBank) {
-            "Need at least $MINIMUM_STARTING_SCORE points to start banking."
-        } else {
-            if (currentState.currentPlayerIndex == 0) "Banked ${currentState.turnScore} points. AI's turn!"
-            else "AI banks ${currentState.turnScore} points. Your turn!"
-        }
-
         return currentState.copy(
             playerScores = updatedScores,
             currentPlayerIndex = nextPlayer,
-            message = message,
             isGameOver = isGameOver,
-            turnScore = 0,
+            currentTurnScore = 0,
             heldDice = emptySet(),
             scoringDice = emptySet(),
             canReroll = true

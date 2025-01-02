@@ -10,7 +10,6 @@ class KaviApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
-
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }

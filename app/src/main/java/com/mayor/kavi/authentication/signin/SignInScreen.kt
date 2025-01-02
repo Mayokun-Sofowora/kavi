@@ -1,8 +1,8 @@
 package com.mayor.kavi.authentication.signin
 
-import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.*
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -10,90 +10,71 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.*
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.google.android.gms.auth.api.signin.*
 import com.google.firebase.auth.*
 import kotlinx.coroutines.launch
 import com.mayor.kavi.R
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
-import com.google.android.gms.common.api.ApiException
-import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.ui.viewmodel.AppViewModel
+import com.mayor.kavi.util.*
+import com.google.android.gms.auth.api.identity.BeginSignInRequest
+import com.google.android.gms.auth.api.identity.Identity
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun SignInScreen(
     navController: NavController,
-    viewModel: SignInViewModel = hiltViewModel(),
-    appViewModel: AppViewModel = hiltViewModel()
+    viewModel: SignInViewModel = hiltViewModel()
 ) {
-    val signInState by viewModel.signInState.collectAsState()
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val signInState by viewModel.signInState.collectAsState(initial = null)
+
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val signInScope = rememberCoroutineScope()
     val context = LocalContext.current
-//    val auth = FirebaseAuth.getInstance()
-
-//    // Check for existing session
-//    LaunchedEffect(Unit) {
-//        if (auth.currentUser != null) {
-//            navController.navigate(Routes.MainMenu.route) {
-//                popUpTo(Routes.SignIn.route) { inclusive = true }
-//            }
-//        }
-//    }
 
     BackHandler(enabled = true) {
         // Do nothing to prevent navigation to sign-in page
     }
 
-    // Show toast when message is available
-    LaunchedEffect(signInState.toastMessage) {
-        signInState.toastMessage?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-
     // Configure Google Sign-In
-    val googleSignInClient = remember {
-        GoogleSignIn.getClient(
-            context,
-            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(context.getString(R.string.default_web_client_id))
-                .requestEmail()
-                .build()
-        )
+    val oneTapClient = remember { Identity.getSignInClient(context) }
+    val signInRequest = remember {
+        BeginSignInRequest.builder()
+            .setGoogleIdTokenRequestOptions(
+                BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
+                    .setSupported(true)
+                    .setServerClientId(context.getString(R.string.default_web_client_id))
+                    .setFilterByAuthorizedAccounts(true)
+                    .build()
+            )
+            .setAutoSelectEnabled(true)
+            .build()
     }
 
     // Google Sign-In result handler
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
+        contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                account?.idToken?.let { token ->
-                    val credential = GoogleAuthProvider.getCredential(token, null)
-                    viewModel.googleSignIn(credential, appViewModel)
-                }
-            } catch (e: ApiException) {
-                Toast.makeText(
-                    context,
-                    "Google sign in failed: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
-                appViewModel.onLoginCancel()
+        try {
+            val credential = oneTapClient.getSignInCredentialFromIntent(result.data)
+            credential.googleIdToken?.let { token ->
+                val firebaseCredential = GoogleAuthProvider.getCredential(token, null)
+                viewModel.googleSignIn(firebaseCredential)
             }
-        } else {
-            appViewModel.onLoginCancel()
+        } catch (e: Exception) {
+            Toast.makeText(
+                context,
+                "Google sign in failed: ${e.message}",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -152,8 +133,7 @@ fun SignInScreen(
         Button(
             onClick = {
                 signInScope.launch {
-                    appViewModel.updateLogin()
-                    viewModel.signIn(email, password, navController, appViewModel)
+                    viewModel.signIn(email, password)
                 }
             }, colors = ButtonDefaults.buttonColors(
                 containerColor = colorResource(id = R.color.primary),
@@ -172,8 +152,20 @@ fun SignInScreen(
         // Google Sign In Button
         Button(
             onClick = {
-                appViewModel.updateLogin()
-                launcher.launch(googleSignInClient.signInIntent)
+                signInScope.launch {
+                    try {
+                        val result = oneTapClient.beginSignIn(signInRequest).await()
+                        launcher.launch(
+                            IntentSenderRequest.Builder(result.pendingIntent.intentSender).build()
+                        )
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "No Google accounts found",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             },
             colors = ButtonDefaults.buttonColors(
                 containerColor = colorResource(id = R.color.primary),
@@ -182,7 +174,7 @@ fun SignInScreen(
                 disabledContentColor = colorResource(id = R.color.on_surface_variant)
             ),
             modifier = Modifier.fillMaxWidth(),
-            enabled = !signInState.isLoading
+            enabled = signInState?.isLoading == false
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
@@ -196,14 +188,13 @@ fun SignInScreen(
         }
 
         // Loading Indicator
-        if (signInState.isLoading) {
+        if (signInState?.isLoading == true) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
         }
 
-
         // Sign Up Link
         TextButton(
-            onClick = { navController.navigate(Routes.SignUp.route) },
+            onClick = { navController.navigateToSignUp() },  // Using extension function
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
                 contentColor = colorResource(id = R.color.primary)
@@ -213,12 +204,33 @@ fun SignInScreen(
         }
     }
 
-    // Handle Google Sign-In result
-    signInState.isAuthSuccess?.let {
-        signInScope.launch {
-            navController.navigate(Routes.MainMenu.route)
-            viewModel.updateSignInStateWithError("Google sign-in successful")
-            appViewModel.onLoginComplete()
+    // Handle sign-in result
+    LaunchedEffect(signInState?.isAuthSuccess) {
+        signInState?.isAuthSuccess?.let { authResult ->
+            if (authResult.user != null) {
+                // Check if user has a profile in Firestore
+                launch {
+                    val userProfile = viewModel.getUserProfile(authResult.user?.uid ?: "")
+                    if (userProfile != null) {
+                        navController.navigateToMainMenu()
+                    } else {
+                        // User doesn't have a profile, navigate to sign up
+                        navController.navigateToSignUp()
+                    }
+                }
+            }
         }
+    }
+
+    // Show toast when message is available
+    LaunchedEffect(signInState?.toastMessage) {
+        signInState?.toastMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Prevent back navigation when signed in
+    BackHandler(enabled = signInState?.isAuthSuccess != null) {
+        // Do nothing to prevent navigation back
     }
 }

@@ -4,8 +4,8 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -13,27 +13,25 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.R
-import com.mayor.kavi.ui.viewmodel.AppViewModel
 import kotlinx.coroutines.launch
+import com.mayor.kavi.util.*
 
 @Composable
 fun SignUpScreen(
     navController: NavController,
-    viewModel: SignUpViewModel = hiltViewModel(),
-    appViewModel: AppViewModel = hiltViewModel()
+    viewModel: SignUpViewModel = hiltViewModel()
 ) {
-    val signUpState by viewModel.signUpState.collectAsState()
+    val signUpState by viewModel.signUpState.collectAsState(initial=null)
     val context = LocalContext.current
-    var username by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var username by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
     val signUpScope = rememberCoroutineScope()
 
     // Show toast when message is available
-    LaunchedEffect(signUpState.toastMessage) {
-        signUpState.toastMessage?.let { message ->
+    LaunchedEffect(signUpState?.toastMessage) {
+        signUpState?.toastMessage?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
@@ -85,8 +83,7 @@ fun SignUpScreen(
         Button(
             onClick = {
                 signUpScope.launch {
-                    appViewModel.updateLogin()
-                    viewModel.signUp(username, email, password, appViewModel)
+                    viewModel.signUp(username, email, password)
                 }
             },
             colors = ButtonDefaults.buttonColors(
@@ -102,16 +99,15 @@ fun SignUpScreen(
         }
 
         // Loading Indicator
-        if (signUpState.isLoading) {
+        if (signUpState?.isLoading == true) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
-
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Already have an account? Sign In Link
         TextButton(
-            onClick = { navController.navigate(Routes.SignIn.route) },
+            onClick = { navController.navigateToSignIn() },
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
                 contentColor = colorResource(id = R.color.primary)
@@ -121,8 +117,7 @@ fun SignUpScreen(
         }
     }
 
-    val loginComplete by appViewModel.loginComplete.collectAsState()
-    if (!loginComplete && signUpState.toastMessage == "Sign-up successful") {
-        navController.navigate(Routes.MainMenu.route)
+    if (signUpState?.toastMessage?.contains("Account created successfully") == true) {
+        navController.navigateToSignIn()
     }
 }

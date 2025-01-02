@@ -19,3 +19,9 @@ venv/
 *.dll
 *.log
 *.tmp
+
+# Keystore files
+*.keystore
+*.jks
+keystore.properties
+/app/keystore/

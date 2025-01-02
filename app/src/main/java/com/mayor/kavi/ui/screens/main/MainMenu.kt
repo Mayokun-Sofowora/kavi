@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -14,13 +15,27 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.repository.AuthRepository
-import com.mayor.kavi.ui.Routes
 import com.mayor.kavi.ui.theme.*
+import com.mayor.kavi.util.*
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.mayor.kavi.ui.viewmodel.AppViewModel
 
+/**
+ * Main menu screen of the application.
+ *
+ * This screen serves as the primary navigation hub, featuring:
+ * - Game mode selection
+ * - Access to statistics and settings
+ * - Visual branding elements
+ * - Responsive layout with background image
+ *
+ * The screen prevents back navigation to maintain proper app flow.
+ */
 @Composable
-fun MainMenuScreen(navController: NavController) {
-    var authRepository by remember { mutableStateOf<AuthRepository?>(null) }
-
+fun MainMenuScreen(
+    navController: NavController,
+    appViewModel: AppViewModel = hiltViewModel()
+) {
     BackHandler(enabled = true) {
         // Prevent navigation to sign-in page
     }
@@ -40,11 +55,19 @@ fun MainMenuScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            MenuButtonsSection(navController, authRepository)
+            MenuButtonsSection(navController, appViewModel)
         }
     }
 }
 
+/**
+ * Background image component for the main menu.
+ *
+ * Displays a full-screen background with:
+ * - Proper scaling and positioning
+ * - Optional overlay or tint
+ * - Responsive sizing
+ */
 @Composable
 private fun BackgroundImage() {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -62,6 +85,14 @@ private fun BackgroundImage() {
     }
 }
 
+/**
+ * Logo section of the main menu.
+ *
+ * Displays the app's branding elements:
+ * - App logo/icon
+ * - Title text
+ * - Optional subtitle or version information
+ */
 @Composable
 private fun LogoSection() {
     Box(
@@ -93,9 +124,8 @@ fun MenuButton(
     Button(
         onClick = onClick.takeIf { enabled } ?: {},
         modifier = Modifier
-            .widthIn(min = 200.dp)
-            .height(70.dp)  // Slightly taller
-            .padding(vertical = 4.dp),
+            .width(280.dp)
+            .heightIn(min = 48.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (enabled) buttonColor else disabledColor,
             contentColor = Color.White
@@ -127,42 +157,66 @@ fun MenuButton(
     }
 }
 
+/**
+ * Main menu navigation buttons section.
+ *
+ * Displays a column of buttons for:
+ * - Game mode selection (Pig, Greed, Balut)
+ * - Statistics view
+ * - Settings access
+ * - Custom game creation
+ *
+ * @param navController Navigation controller for screen transitions
+ * @param appViewModel AppViewModel for user state
+ */
 @Composable
 private fun MenuButtonsSection(
     navController: NavController,
-    authRepository: AuthRepository?
+    appViewModel: AppViewModel
 ) {
     Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)  // Reduced spacing
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        MenuButton(
-            label = "Start",
-            onClick = { navController.navigate(Routes.Start.route) }
-        )
-        MenuButton(
-            label = "Settings",
-            onClick = { navController.navigate(Routes.Settings.route) }
-        )
-        MenuButton(
-            label = "Instructions",
-            onClick = { navController.navigate(Routes.Instructions.route) }
-        )
-        MenuButton(
-            label = "Statistics",
-            onClick = { navController.navigate(Routes.Statistics.route) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))  // Increased spacing before logout
-
-        MenuButton(
-            label = "Logout",
-            onClick = {
-                authRepository?.signOut()
-                navController.navigate(Routes.SignOut.route) {
-                    popUpTo(Routes.MainMenu.route) { inclusive = true }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MenuButton(
+                label = "Start",
+                onClick = { navController.navigateToStart() }
+            )
+            MenuButton(
+                label = "Settings",
+                onClick = { navController.navigateToSettings() }
+            )
+            MenuButton(
+                label = "Instructions",
+                onClick = { navController.navigateToInstructions() }
+            )
+            MenuButton(
+                label = "Statistics",
+                onClick = { navController.navigateToStatistics() }
+            )
+            MenuButton(
+                label = "Leaderboard",
+                onClick = { navController.navigateToLeaderboards() }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            MenuButton(
+                label = "Logout",
+                onClick = {
+                    appViewModel.signOut()
+                    navController.signOut()
                 }
-            }
-        )
+            )
+        }
     }
 }

@@ -11,7 +11,5 @@ interface StatisticsRepository {
     suspend fun getGameStatistics(): Result<GameStatistics>
     suspend fun updateGameStatistics(stats: GameStatistics): Result<Unit>
     suspend fun updatePlayerAnalysis(userId: String, analysis: PlayerAnalysis): Result<Unit>
-    suspend fun updateUserOnlineStatus(isOnline: Boolean): Result<Unit>
-    suspend fun cleanupGameSession(sessionId: String): Result<Unit>
     suspend fun clearUserStatistics(): Result<Unit>
 }

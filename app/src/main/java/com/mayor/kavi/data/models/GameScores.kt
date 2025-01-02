@@ -1,56 +1,49 @@
-// GameScores.kt
 package com.mayor.kavi.data.models
 
-/**
- * Where the states are defined for the boards.
- */
+import kotlinx.serialization.Serializable
+
+@Serializable
 sealed class GameScoreState {
     abstract val isGameOver: Boolean
-    abstract val message: String
     abstract val currentPlayerIndex: Int
-    abstract val playerCount: Int
 
+    @Serializable
     data class PigScoreState(
         val playerScores: Map<Int, Int> = emptyMap(),
         val currentTurnScore: Int = 0,
         override val currentPlayerIndex: Int = 0,
-        override val playerCount: Int = 2,
-        override val isGameOver: Boolean = false,
-        override val message: String = ""
+        override val isGameOver: Boolean = false
     ) : GameScoreState()
 
+    @Serializable
     data class GreedScoreState(
         val playerScores: Map<Int, Int> = emptyMap(),
-        val turnScore: Int = 0,
+        val currentTurnScore: Int = 0,
         val heldDice: Set<Int> = emptySet(),
         val scoringDice: Set<Int> = emptySet(),
         val canReroll: Boolean = true,
         val lastRoll: List<Int> = emptyList(),
-        val roundHistory: Map<Int, List<Int>> = emptyMap(),
         override val currentPlayerIndex: Int = 0,
-        override val playerCount: Int = 2,
-        override val isGameOver: Boolean = false,
-        override val message: String = ""
+        override val isGameOver: Boolean = false
     ) : GameScoreState() {
         companion object {
             val SCORING_VALUES = mapOf(1 to 100, 5 to 50)
         }
     }
 
+    @Serializable
     data class BalutScoreState(
         val playerScores: Map<Int, Map<String, Int>> = emptyMap(),
-        val rollsLeft: Int = 4, // changed to 4 so you can roll 3 times
+        val rollsLeft: Int = 4,
         val heldDice: Set<Int> = emptySet(),
         val currentRound: Int = 1,
         val maxRounds: Int = 11,
         override val currentPlayerIndex: Int = 0,
-        override val playerCount: Int = 2,
-        override val isGameOver: Boolean = false,
-        override val message: String = ""
+        override val isGameOver: Boolean = false
     ) : GameScoreState()
 
+    @Serializable
     data class CustomScoreState(
-        val gameId: String = "",
         val diceCount: Int = 2,
         val scoreHistory: Map<Int, List<String>> = emptyMap(),
         val gameName: String = "Custom Dice Game",
@@ -58,9 +51,6 @@ sealed class GameScoreState {
         val notes: List<String> = emptyList(),
         val playerScores: Map<Int, Int> = emptyMap(),
         override val currentPlayerIndex: Int = 0,
-        override val message: String = "",
-        override val playerCount: Int = 2,
-        override val isGameOver: Boolean = false,
+        override val isGameOver: Boolean = false
     ) : GameScoreState()
-
 }

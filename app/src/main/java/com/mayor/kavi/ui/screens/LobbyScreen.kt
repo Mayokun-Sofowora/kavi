@@ -66,18 +66,17 @@ fun LobbyScreen(
                 if (gameViewModel.playMode.value == PlayMode.Multiplayer &&
                     gameViewModel.selectedBoard.value == GameBoard.GREED.modeName
                 ) {
-                    navController.navigate(Routes.MultiplayerBoard.route + "/${sessionId}") {
-                        launchSingleTop = true
-                    }
+//                    navController.navigate(Routes.MultiplayerBoard.route + "/${sessionId}") {
+//                        launchSingleTop = true
+//                    }
+//                    navController.navigateToBoard(Screen.Board.BoardTwo)
                 }
             }
 
             is NavigationEvent.NavigateBack -> {
                 gameViewModel.resetGameSession()
                 gameViewModel.stopListeningForOnlinePlayers()
-                navController.navigate(Routes.Boards.route) {
-                    popUpTo(Routes.Lobby.route) { inclusive = true }
-                }
+                navController.navigateToBoards()
             }
 
             else -> {}

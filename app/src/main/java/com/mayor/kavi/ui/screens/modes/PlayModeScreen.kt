@@ -16,12 +16,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.navigation.NavController
 import com.mayor.kavi.R
-import com.mayor.kavi.data.models.UserProfile
-import com.mayor.kavi.util.GameBoard
-import com.mayor.kavi.data.models.PlayMode
-import com.mayor.kavi.ui.Routes
-import com.mayor.kavi.util.Result
+import com.mayor.kavi.data.models.*
+import com.mayor.kavi.ui.Screen
 import com.mayor.kavi.ui.viewmodel.*
+import com.mayor.kavi.util.*
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -196,7 +194,7 @@ fun PlayModeScreen(
                         )
                     ) {
                         Text(
-                            "Play Vs Player",
+                            "Play Multiplayer",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             )
@@ -235,14 +233,13 @@ fun PlayModeScreen(
     }
 }
 
-
 private fun navigateToBoard(gameViewModel: GameViewModel, navController: NavController) {
     if (gameViewModel.playMode.value is PlayMode.Multiplayer) {
         Timber.tag("Navigation").d("Navigating to Multiplayer Lobby")
-        navController.navigate(Routes.Lobby.route)
+        navController.navigateToLobby()  // Using extension function
     } else if (gameViewModel.playMode.value is PlayMode.SinglePlayer) {
         Timber.tag("Navigation").d("Navigating to Single Player Board")
-        navController.navigate(Routes.BoardTwo.route)
+        navController.navigateToBoard(Screen.Board.Two) // Using extension function
     } else {
         Timber.tag("Navigation").d("Unknown GameMode")
     }

@@ -21,6 +21,29 @@ import androidx.navigation.NavController
 import com.mayor.kavi.R
 import kotlinx.coroutines.launch
 
+/**
+ * Instructions screen providing game rules and gameplay guidance.
+ *
+ * Features:
+ * - Horizontal paging for different game variants
+ * - Visual instructions with animations
+ * - Interactive examples
+ * - Navigation controls
+ * - Quick access to specific rules
+ *
+ * The screen provides comprehensive instructions for:
+ * - Pig dice game rules
+ * - Greed dice game rules
+ * - Balut dice game rules
+ * - Custom board rules
+ * - Scoring systems
+ * - Game controls
+ * - Strategy tips
+ *
+ * @param navController Navigation controller for screen transitions
+ * @param startPage Initial page to display (0-5)
+ * @param showOnlyPage Whether to show only a single page
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstructionsScreen(
@@ -106,7 +129,8 @@ fun InstructionsScreen(
                                     "  - Full House: Sum of all dice (three of one number, two of another)\n" +
                                     "  - Four of a Kind: Sum of all five dice\n" +
                                     "  - Five of a Kind: Sum of all dice + 100 bonus\n" +
-                                    "  - Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
+                                    "  - Small Straight: 30 points (1-2-3-4, 2-3-4-5, or 3-4-5-6)\n" +
+                                    "  - Large Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
                                     "  - Choice: Sum of all dice\n" +
                                     "You get 3 rolls per turn. After each roll, you can hold dice you want to keep. " +
                                     "Each category can only be used once. Highest total score wins." +
@@ -193,7 +217,8 @@ fun InstructionsScreen(
                                             "  - Full House: Sum of all dice (three of one number, two of another)\n" +
                                             "  - Four of a Kind: Sum of all five dice\n" +
                                             "  - Five of a Kind: Sum of all dice + 100 bonus\n" +
-                                            "  - Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
+                                            "  - Small Straight: 30 points (1-2-3-4, 2-3-4-5, or 3-4-5-6)\n" +
+                                            "  - Large Straight: 40 points (1-2-3-4-5 or 2-3-4-5-6)\n" +
                                             "  - Choice: Sum of all dice\n" +
                                             "You get 3 rolls per turn. After each roll, you can hold dice you want to keep. " +
                                             "Each category can only be used once. Highest total score wins." +

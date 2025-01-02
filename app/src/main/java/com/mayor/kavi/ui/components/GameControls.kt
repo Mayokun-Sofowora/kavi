@@ -9,7 +9,28 @@ import androidx.compose.ui.unit.*
 import com.mayor.kavi.R
 
 /**
- * Composable to display the game controls on the board screen.
+ * A composable that provides game control buttons and interactions.
+ *
+ * Features:
+ * - Roll button with state management
+ * - Optional banking control
+ * - Category selection for Balut
+ * - Turn management
+ * - Dynamic button states
+ * - Visual feedback
+ *
+ * The controls adapt based on:
+ * - Current game variant
+ * - Game state
+ * - Player turn
+ * - Available actions
+ *
+ * @param onRoll Callback for dice roll action
+ * @param onBank Optional callback for banking points
+ * @param onSelectedCategory Optional callback for category selection (Balut)
+ * @param onEndTurn Optional callback for ending turn
+ * @param isRolling Whether a roll animation is in progress
+ * @param canReroll Whether rolling is currently allowed
  */
 @Composable
 fun GameControls(
@@ -28,7 +49,6 @@ fun GameControls(
             onClick = onRoll,
             enabled = !isRolling && canReroll,
             colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(id = R.color.primary),
                 contentColor = colorResource(id = R.color.on_primary)
             ),
             modifier = Modifier.weight(1f)
@@ -40,7 +60,6 @@ fun GameControls(
             Button(
                 onClick = onBank,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.primary),
                     contentColor = colorResource(id = R.color.on_primary)
                 ),
                 modifier = Modifier.weight(1f)
@@ -53,7 +72,6 @@ fun GameControls(
             Button(
                 onClick = onEndTurn,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.primary),
                     contentColor = colorResource(id = R.color.on_primary)
                 ),
                 modifier = Modifier.weight(1f)
@@ -67,7 +85,6 @@ fun GameControls(
                 onClick = onSelectedCategory,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colorResource(id = R.color.primary),
                     contentColor = colorResource(id = R.color.on_primary)
                 )
             ) {

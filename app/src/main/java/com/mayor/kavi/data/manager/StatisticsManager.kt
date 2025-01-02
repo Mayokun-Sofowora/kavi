@@ -7,7 +7,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.mayor.kavi.data.models.*
 import com.mayor.kavi.data.repository.*
-import com.mayor.kavi.util.IoDispatcher
+import com.mayor.kavi.di.AppModule.IoDispatcher
 import com.mayor.kavi.util.Result
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -17,6 +17,8 @@ import timber.log.Timber
 import javax.inject.Singleton
 import kotlin.math.*
 import kotlinx.serialization.encodeToString
+import org.tensorflow.lite.Interpreter
+import java.nio.*
 
 @Singleton
 class StatisticsManager @Inject constructor(
@@ -36,7 +38,13 @@ class StatisticsManager @Inject constructor(
 
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "statistics")
     private val dataStore = context.dataStore
-    private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
+    private val json = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+        allowSpecialFloatingPointValues = true
+    }
+
+    private var interpreter: Interpreter? = null
 
     private val _playerAnalysis = MutableStateFlow<PlayerAnalysis?>(null)
     val playerAnalysis: StateFlow<PlayerAnalysis?> = _playerAnalysis.asStateFlow()
@@ -44,30 +52,155 @@ class StatisticsManager @Inject constructor(
     private val _gameStatistics = MutableStateFlow<GameStatistics?>(null)
     val gameStatistics: StateFlow<GameStatistics?> = _gameStatistics.asStateFlow()
 
+    private val _gameStartTime = MutableStateFlow<Long>(0)
+    private val _turnStartTime = MutableStateFlow<Long>(0)
+    private val _decisionTimes = MutableStateFlow<MutableList<Long>>(mutableListOf())
+    private val _rollsThisTurn = MutableStateFlow(0)
+    private val _bankingScores = MutableStateFlow<MutableList<Int>>(mutableListOf())
+
     init {
         applicationScope.launch(dispatcher) {
+            initializeTFLiteModel(context)
             loadGameStatistics()
             updatePlayerAnalysis()
         }
     }
 
-    fun updateGameStatistics(gameMode: String, score: Int, isWin: Boolean) {
+    private fun initializeTFLiteModel(context: Context) {
+        try {
+            context.assets.open("dice_stats_model.tflite").use { inputStream ->
+                val modelBytes = inputStream.readBytes()
+                val modelBuffer = ByteBuffer.allocateDirect(modelBytes.size)
+                    .order(ByteOrder.nativeOrder())
+                modelBuffer.put(modelBytes)
+                modelBuffer.rewind()
+                interpreter = Interpreter(modelBuffer)
+                Timber.d("TFLite model loaded successfully")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error loading TFLite model: ${e.message}")
+            // Make sure we don't keep a broken interpreter
+            interpreter = null
+        }
+    }
+
+    private fun prepareModelInput(stats: GameStatistics): FloatBuffer {
+        val inputBuffer = FloatBuffer.allocate(4)
+
+        // Normalize inputs to match training data ranges
+        inputBuffer.put(minOf(stats.gamesPlayed.toFloat(), 100f) / 100f)  // games_played
+        inputBuffer.put(calculateWinRate(stats))                           // win_rate
+        inputBuffer.put(calculateAverageScore(stats) / 1000f)             // avg_score
+        inputBuffer.put(calculateConsistency(stats))                       // consistency
+
+        inputBuffer.rewind()
+        return inputBuffer
+    }
+
+    private fun calculateAverageScore(stats: GameStatistics): Float {
+        val scores =
+            stats.playerAnalysis?.performanceMetrics?.averageScoreByMode?.values ?: return 0f
+        return if (scores.isNotEmpty()) scores.average().toFloat() else 0f
+    }
+
+    private fun determinePlayStyleFromModel(playStyleScore: Float): PlayStyle {
+        return when {
+            playStyleScore > 0.66f -> PlayStyle.AGGRESSIVE
+            playStyleScore < 0.33f -> PlayStyle.CAUTIOUS
+            else -> PlayStyle.BALANCED
+        }
+    }
+
+    private fun runModelInference(stats: GameStatistics): PlayerAnalysisPrediction {
+        if (interpreter == null) return PlayerAnalysisPrediction()
+
+        val inputBuffer = prepareModelInput(stats)
+        val outputBuffer = FloatBuffer.allocate(4)
+
+        try {
+            interpreter?.run(inputBuffer, outputBuffer)
+            outputBuffer.rewind()
+
+            return PlayerAnalysisPrediction(
+                predictedWinRate = outputBuffer.get(),
+                predictedConsistency = outputBuffer.get(),
+                improvementPotential = outputBuffer.get(),
+                predictedPlayStyle = determinePlayStyleFromModel(outputBuffer.get())
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Error running model inference: ${e.message}")
+            return PlayerAnalysisPrediction()
+        }
+    }
+
+    data class PlayerAnalysisPrediction(
+        val predictedWinRate: Float = 0.5f,
+        val predictedConsistency: Float = 0.5f,
+        val improvementPotential: Float = 0.5f,
+        val predictedPlayStyle: PlayStyle = PlayStyle.BALANCED
+    )
+
+    fun updateGameStatistics(
+        gameMode: String,
+        score: Int,
+        isWin: Boolean,
+        wasComeback: Boolean = false,
+        wasCloseGame: Boolean = false
+    ) {
         val currentStats = _gameStatistics.value ?: GameStatistics()
+
+        val timeMetrics = updateTimeMetrics(currentStats)
+        val decisionPatterns = updateDecisionPatterns()
+        val performanceMetrics = updatePerformanceMetrics(
+            currentStats, isWin, gameMode, score,
+            wasComeback, wasCloseGame
+        )
+
+        val achievements = calculateAchievements(timeMetrics, performanceMetrics, decisionPatterns)
+
+        // Calculate player analysis metrics based on actual gameplay
+        val currentAnalysis = currentStats.playerAnalysis ?: PlayerAnalysis()
+        val newAnalysis = PlayerAnalysis(
+            predictedWinRate = calculateWinRate(currentStats),
+            consistency = calculateConsistency(currentStats),
+            playStyle = determinePlayStyle(currentStats),
+            improvement = calculateImprovement(currentStats),
+            decisionPatterns = DecisionPatterns(
+                averageRollsPerTurn = (currentAnalysis.decisionPatterns.averageRollsPerTurn * currentStats.gamesPlayed + decisionPatterns.averageRollsPerTurn) / (currentStats.gamesPlayed + 1),
+                bankingThreshold = (currentAnalysis.decisionPatterns.bankingThreshold * currentStats.gamesPlayed + decisionPatterns.bankingThreshold) / (currentStats.gamesPlayed + 1),
+                riskTaking = (currentAnalysis.decisionPatterns.riskTaking * currentStats.gamesPlayed + decisionPatterns.riskTaking) / (currentStats.gamesPlayed + 1),
+                decisionSpeed = (currentAnalysis.decisionPatterns.decisionSpeed * currentStats.gamesPlayed + decisionPatterns.decisionSpeed) / (currentStats.gamesPlayed + 1)
+            ),
+            timeMetrics = TimeMetrics(
+                averageGameDuration = (currentAnalysis.timeMetrics.averageGameDuration * currentStats.gamesPlayed + timeMetrics.averageGameDuration) / (currentStats.gamesPlayed + 1),
+                averageTurnDuration = (currentAnalysis.timeMetrics.averageTurnDuration * currentStats.gamesPlayed + timeMetrics.averageTurnDuration) / (currentStats.gamesPlayed + 1),
+                fastestGame = minOf(
+                    currentAnalysis.timeMetrics.fastestGame,
+                    timeMetrics.fastestGame
+                ),
+                totalPlayTime = currentAnalysis.timeMetrics.totalPlayTime + timeMetrics.totalPlayTime
+            ),
+            performanceMetrics = performanceMetrics,
+            achievementProgress = achievements
+        )
+
         val updatedStats = currentStats.copy(
+            gamesPlayed = currentStats.gamesPlayed + 1,
             highScores = currentStats.highScores.toMutableMap().apply {
                 val currentHigh = this[gameMode] ?: 0
                 if (score > currentHigh) {
                     this[gameMode] = score
                 }
             },
-            gamesPlayed = currentStats.gamesPlayed + 1,
             winRates = currentStats.winRates.toMutableMap().apply {
                 val currentWinRate = this[gameMode] ?: WinRate()
                 this[gameMode] = WinRate(
                     wins = currentWinRate.wins + if (isWin) 1 else 0,
                     total = currentWinRate.total + 1
                 )
-            }
+            },
+            playerAnalysis = newAnalysis,
+            lastSeen = System.currentTimeMillis()  // Update lastSeen timestamp
         )
 
         // Update local state
@@ -79,7 +212,7 @@ class StatisticsManager @Inject constructor(
             when (val result = statisticsRepository.updateGameStatistics(updatedStats)) {
                 is Result.Success -> {
                     Timber.d("Successfully updated game statistics")
-                    updatePlayerAnalysis() // Update analysis after statistics change
+                    updatePlayerAnalysis()
                 }
 
                 is Result.Error -> {
@@ -102,7 +235,7 @@ class StatisticsManager @Inject constructor(
                     val remoteStats = result.data
                     val localStats = _gameStatistics.value
 
-                    // Merge remote and local stats by taking the maximum values
+                    // Merge remote and local stats by taking the latest values
                     val mergedStats = if (localStats != null) {
                         GameStatistics(
                             gamesPlayed = maxOf(remoteStats.gamesPlayed, localStats.gamesPlayed),
@@ -115,14 +248,18 @@ class StatisticsManager @Inject constructor(
                             winRates = (remoteStats.winRates.keys + localStats.winRates.keys).associateWith { gameMode ->
                                 val remoteWinRate = remoteStats.winRates[gameMode] ?: WinRate()
                                 val localWinRate = localStats.winRates[gameMode] ?: WinRate()
-                                // Take the maximum of wins and totals instead of adding them
-                                WinRate(
-                                    wins = maxOf(remoteWinRate.wins, localWinRate.wins),
-                                    total = maxOf(remoteWinRate.total, localWinRate.total)
-                                )
+                                // Take the latest win rate
+                                if ((remoteStats.lastSeen ?: 0) > (localStats.lastSeen ?: 0)) {
+                                    remoteWinRate
+                                } else {
+                                    localWinRate
+                                }
                             },
                             lastSeen = maxOf(remoteStats.lastSeen ?: 0, localStats.lastSeen ?: 0),
-                            playerAnalysis = remoteStats.playerAnalysis ?: localStats.playerAnalysis
+                            playerAnalysis = mergePlayerAnalysis(
+                                remoteStats.playerAnalysis,
+                                localStats.playerAnalysis
+                            )
                         )
                     } else {
                         remoteStats
@@ -131,10 +268,8 @@ class StatisticsManager @Inject constructor(
                     // Update both local and remote with merged data
                     _gameStatistics.value = mergedStats
                     saveGameStatisticsToDataStore(mergedStats)
-                    // Only update remote if local has higher values
-                    if (localStats != null && shouldUpdateRemote(localStats, remoteStats)) {
-                        statisticsRepository.updateGameStatistics(mergedStats)
-                    }
+                    // Always update remote with merged stats to ensure consistency
+                    statisticsRepository.updateGameStatistics(mergedStats)
                 }
 
                 is Result.Error -> {
@@ -148,42 +283,47 @@ class StatisticsManager @Inject constructor(
         }
     }
 
-    private fun shouldUpdateRemote(local: GameStatistics, remote: GameStatistics): Boolean {
-        // Check if local has any higher values that need to be synced to remote
-        if (local.gamesPlayed > remote.gamesPlayed) return true
+    private fun mergePlayerAnalysis(
+        remote: PlayerAnalysis?,
+        local: PlayerAnalysis?
+    ): PlayerAnalysis {
+        if (remote == null) return local ?: PlayerAnalysis()
+        if (local == null) return remote
 
-        // Check high scores
-        for (gameMode in local.highScores.keys) {
-            if ((local.highScores[gameMode] ?: 0) > (remote.highScores[gameMode] ?: 0)) {
-                return true
-            }
+        // Take the latest values based on consistency
+        return if (remote.consistency > local.consistency) {
+            remote
+        } else {
+            local
         }
-
-        // Check win rates
-        for (gameMode in local.winRates.keys) {
-            val localWinRate = local.winRates[gameMode] ?: WinRate()
-            val remoteWinRate = remote.winRates[gameMode] ?: WinRate()
-            if (localWinRate.wins > remoteWinRate.wins || localWinRate.total > remoteWinRate.total) {
-                return true
-            }
-        }
-
-        return false
     }
 
     private suspend fun updatePlayerAnalysis() {
         val stats = _gameStatistics.value ?: return
-        val currentUser = userRepository.getCurrentUserId()
+        val currentUser = userRepository.getCurrentUserId() ?: return
 
+        // Get model predictions
+        val predictions = runModelInference(stats)
+
+        // Calculate player analysis based on actual gameplay patterns
+        val currentAnalysis = stats.playerAnalysis ?: PlayerAnalysis()
         val analysis = PlayerAnalysis(
-            predictedWinRate = calculateWinRate(stats),
+            predictedWinRate = predictions.predictedWinRate,
             consistency = calculateConsistency(stats),
             playStyle = determinePlayStyle(stats),
-            improvement = calculateImprovement(stats)
+            improvement = calculateImprovement(stats),
+            decisionPatterns = currentAnalysis.decisionPatterns,  // Keep tracked patterns
+            timeMetrics = currentAnalysis.timeMetrics,  // Keep tracked metrics
+            performanceMetrics = currentAnalysis.performanceMetrics,  // Keep tracked performance
+            achievementProgress = currentAnalysis.achievementProgress  // Keep tracked achievements
         )
 
         _playerAnalysis.value = analysis
-        statisticsRepository.updatePlayerAnalysis(currentUser!!, analysis)
+        try {
+            statisticsRepository.updatePlayerAnalysis(currentUser, analysis)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update player analysis")
+        }
     }
 
     private suspend fun saveGameStatisticsToDataStore(stats: GameStatistics) {
@@ -321,4 +461,183 @@ class StatisticsManager @Inject constructor(
 
         return currentTurnScore >= finalMinScore + randomRange.random()
     }
+
+    fun startGameTimer() {
+        _gameStartTime.value = System.currentTimeMillis()
+    }
+
+    fun startTurnTimer() {
+        _turnStartTime.value = System.currentTimeMillis()
+        _rollsThisTurn.value = 0
+    }
+
+    fun recordDecision(timeSpent: Long) {
+        _decisionTimes.value.add(timeSpent)
+    }
+
+    fun recordRoll() {
+        _rollsThisTurn.value += 1
+    }
+
+    fun recordBanking(score: Int) {
+        _bankingScores.value.add(score)
+    }
+
+    private fun updateTimeMetrics(currentStats: GameStatistics): TimeMetrics {
+        val gameDuration = System.currentTimeMillis() - _gameStartTime.value
+        val currentMetrics = currentStats.playerAnalysis?.timeMetrics ?: TimeMetrics()
+        val avgDuration = if (currentMetrics.averageGameDuration == 0L) {
+            gameDuration.toLong()
+        } else {
+            (currentMetrics.averageGameDuration + gameDuration) / 2L
+        }
+
+        val avgTurnDuration = if (_decisionTimes.value.isEmpty()) {
+            0L
+        } else {
+            _decisionTimes.value.average().toLong()
+        }
+
+        return TimeMetrics(
+            averageGameDuration = avgDuration,
+            averageTurnDuration = avgTurnDuration,
+            fastestGame = if (currentMetrics.fastestGame == 0L || gameDuration < currentMetrics.fastestGame) {
+                gameDuration
+            } else {
+                currentMetrics.fastestGame
+            },
+            totalPlayTime = currentMetrics.totalPlayTime + gameDuration
+        )
+    }
+
+    private fun updateDecisionPatterns(): DecisionPatterns {
+        return DecisionPatterns(
+            averageRollsPerTurn = _rollsThisTurn.value.toFloat(),
+            bankingThreshold = _bankingScores.value.average().toFloat(),
+            riskTaking = calculateRiskTaking(),
+            decisionSpeed = _decisionTimes.value.average().toFloat()
+        )
+    }
+
+    private fun calculateRiskTaking(): Float {
+        val avgBankingScore = _bankingScores.value.average()
+        val maxPossibleScore = when {
+            avgBankingScore > 800 -> 10000f // Greed game
+            avgBankingScore > 50 -> 100f    // Pig game
+            else -> 50f                     // Default
+        }
+        return (avgBankingScore / maxPossibleScore).toFloat()
+    }
+
+    private fun updatePerformanceMetrics(
+        currentStats: GameStatistics,
+        isWin: Boolean,
+        gameMode: String,
+        finalScore: Int,
+        wasComeback: Boolean,
+        wasCloseGame: Boolean
+    ): PerformanceMetrics {
+        val currentMetrics = currentStats.playerAnalysis?.performanceMetrics ?: PerformanceMetrics()
+
+        val newStreak = if (isWin) currentMetrics.currentStreak + 1 else 0
+        val personalBests = currentMetrics.personalBests.toMutableMap()
+        if (finalScore > (personalBests[gameMode] ?: 0)) {
+            personalBests[gameMode] = finalScore
+        }
+
+        val avgScores = currentMetrics.averageScoreByMode.toMutableMap()
+        val currentAvg = avgScores[gameMode] ?: 0f
+        avgScores[gameMode] = if (currentAvg == 0f)
+            finalScore.toFloat()
+        else
+            (currentAvg + finalScore) / 2
+
+        return PerformanceMetrics(
+            currentStreak = newStreak,
+            longestStreak = maxOf(newStreak, currentMetrics.longestStreak),
+            comebacks = currentMetrics.comebacks + if (wasComeback) 1 else 0,
+            closeGames = currentMetrics.closeGames + if (wasCloseGame) 1 else 0,
+            personalBests = personalBests,
+            averageScoreByMode = avgScores
+        )
+    }
+
+    private fun calculateAchievements(
+        timeMetrics: TimeMetrics,
+        performanceMetrics: PerformanceMetrics,
+        decisionPatterns: DecisionPatterns
+    ): Map<String, Float> {
+        val tenHoursInMillis = 36_000_000L // 10 hours in milliseconds
+        val stats = gameStatistics.value ?: GameStatistics()
+
+        return mapOf(
+            Achievement.STREAK_MASTER.name to (performanceMetrics.longestStreak.toFloat() / 10f).coerceAtMost(
+                1f
+            ),
+            Achievement.COMEBACK_KING.name to (performanceMetrics.comebacks.toFloat() / 5f).coerceAtMost(
+                1f
+            ),
+            Achievement.CONSISTENT_PLAYER.name to (1f - calculateConsistency(stats)).coerceAtMost(1f),
+            Achievement.RISK_TAKER.name to decisionPatterns.riskTaking,
+            Achievement.SPEED_STAR.name to (1000f / (decisionPatterns.decisionSpeed + 1f)).coerceAtMost(
+                1f
+            ),
+            Achievement.VETERAN_PLAYER.name to (timeMetrics.totalPlayTime / tenHoursInMillis.toFloat()).coerceAtMost(
+                1f
+            )
+        )
+    }
+
+    suspend fun clearUserStatistics() {
+        // Reset all local state
+        _gameStatistics.value = GameStatistics()
+        _playerAnalysis.value = null
+        _gameStartTime.value = 0
+        _turnStartTime.value = 0
+        _rollsThisTurn.value = 0
+        _decisionTimes.value.clear()
+        _bankingScores.value.clear()
+        // Clear local storage
+        saveGameStatisticsToDataStore(GameStatistics())
+        // Clear remote storage
+        try {
+            when (val result = statisticsRepository.clearUserStatistics()) {
+                is Result.Success -> {
+                    Timber.d("Successfully cleared user statistics")
+                }
+
+                is Result.Error -> {
+                    Timber.e(result.exception, "Failed to clear remote statistics")
+                }
+
+                else -> {}
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error clearing user statistics")
+        }
+    }
+
+    suspend fun clearAllData() {
+        // Reset all local state
+        _gameStatistics.value = GameStatistics()
+        _playerAnalysis.value = null
+        _gameStartTime.value = 0
+        _turnStartTime.value = 0
+        _rollsThisTurn.value = 0
+        _decisionTimes.value.clear()
+        _bankingScores.value.clear()
+
+        // Clear local storage
+        try {
+            val userId = userRepository.getCurrentUserId()
+            if (userId != null) {
+                dataStore.edit { prefs ->
+                    prefs.remove(gameStatisticsKey(userId))
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error clearing local statistics data")
+        }
+    }
+
 }

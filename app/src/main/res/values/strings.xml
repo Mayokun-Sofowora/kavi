@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Kavi</string>
+    <string name="app_name">Kavi Dice</string>
     <string name="play">Play</string>
     <string name="previous_games">Previous games</string>
     <string name="highscore">Highscore</string>
