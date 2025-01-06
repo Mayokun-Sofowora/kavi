@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.mayor.kavi">
 
     <application
@@ -9,11 +8,6 @@
             android:name=".HiltTestActivity"
             android:exported="false"
             android:theme="@style/Theme.Kavi" />
-
-<!--        <meta-data-->
-<!--            android:name="com.google.ar.core"-->
-<!--            android:value="required"-->
-<!--            tools:replace="android:value"/>-->
     </application>
 
 </manifest>

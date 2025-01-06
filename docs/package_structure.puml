@@ -1,0 +1,111 @@
+@startuml package_structure
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package "com.mayor.kavi" {
+    package "authentication" {
+        package "signin" {
+            [SignInScreen.kt]
+            [SignInViewModel.kt]
+        }
+        package "signup" {
+            [SignUpScreen.kt]
+            [SignUpViewModel.kt]
+        }
+    }
+
+    package "data" {
+        package "models" {
+            [UserProfile.kt]
+            [GameStatistics.kt]
+            [LeaderboardEntry.kt]
+            [GameScores.kt]
+            [PlayerAnalysis.kt]
+        }
+
+        package "repository" {
+            [AuthRepository.kt]
+            [UserRepository.kt]
+            [LeaderboardRepository.kt]
+            [StatisticsRepository.kt]
+            [AuthRepositoryImpl.kt]
+            [UserRepositoryImpl.kt]
+            [LeaderboardRepositoryImpl.kt]
+            [StatisticsRepositoryImpl.kt]
+        }
+
+        package "manager" {
+            package "games" {
+                [PigGameManager.kt]
+                [GreedGameManager.kt]
+                [BalutGameManager.kt]
+                [MyGameManager.kt]
+            }
+            [StatisticsManager.kt]
+            [DataStoreManager.kt]
+            [DiceManager.kt]
+            [ShakeDetectionManager.kt]
+            [SettingsManager.kt]
+        }
+    }
+
+    package "ui" {
+        package "screens" {
+            package "main" {
+                [MainMenu.kt]
+                [StatisticsScreen.kt]
+                [LeaderboardScreen.kt]
+                [SocialScreen.kt]
+            }
+            package "modes" {
+                [InterfaceModeScreen.kt]
+                [BoardsScreen.kt]
+            }
+            package "gameboards" {
+                [BoardOneScreen.kt]
+                [BoardTwoScreen.kt]
+                [BoardThreeScreen.kt]
+                [BoardFourScreen.kt]
+            }
+        }
+
+        package "viewmodel" {
+            [AppViewModel.kt]
+            [GameViewModel.kt]
+            [LeaderboardViewModel.kt]
+        }
+
+        package "theme" {
+            [Color.kt]
+            [Theme.kt]
+            [Type.kt]
+        }
+    }
+
+    package "di" {
+        [AppModule.kt]
+    }
+
+    package "util" {
+        [Result.kt]
+        [Constants.kt]
+        [Extensions.kt]
+    }
+
+    [MainActivity.kt]
+    [KaviApplication.kt]
+    [AppNavigation.kt]
+}
+
+' Key dependencies
+authentication ..> data
+ui ..> data
+ui ..> authentication
+data ..> util
+authentication ..> util
+di ..> data
+di ..> authentication
+di ..> ui
+
+@enduml

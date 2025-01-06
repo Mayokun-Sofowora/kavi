@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import com.airbnb.lottie.compose.*
 import com.mayor.kavi.R
 
@@ -20,7 +21,7 @@ fun ConfettiAnimation(
     val progress by animateLottieCompositionAsState(
         composition = composition,
         isPlaying = isPlaying,
-        speed = 1.5f,
+        speed = 1f,
         iterations = 1,
         restartOnPlay = false,
         cancellationBehavior = LottieCancellationBehavior.Immediately
@@ -39,6 +40,7 @@ fun ConfettiAnimation(
         LottieAnimation(
             composition = composition,
             progress = { progress },
+            contentScale = ContentScale.FillBounds,
             modifier = Modifier.fillMaxSize()
         )
     }

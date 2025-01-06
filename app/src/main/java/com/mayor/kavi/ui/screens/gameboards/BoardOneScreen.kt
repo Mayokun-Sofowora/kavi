@@ -285,7 +285,7 @@ fun BoardOneScreen(
         EndGameDialog(
             pigState = pigState,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = navController::navigateUp
+            onExit = { navController.exitGame() }
         )
     }
 
@@ -293,7 +293,7 @@ fun BoardOneScreen(
     if (showExitGameDialog) {
         ExitDialog(
             onDismiss = { showExitGameDialog = false },
-            onConfirm = navController::navigateUp
+            onConfirm = { navController.exitGame() }
         )
     }
 }

@@ -61,3 +61,10 @@ fun NavController.signOut() {
         popUpTo(0) { inclusive = true }
     }
 }
+
+fun NavController.exitGame() {
+    navigate(Screen.Boards.route) {
+        popUpTo(Screen.Boards.route) { inclusive = false }
+        launchSingleTop = true
+    }
+}

@@ -117,11 +117,10 @@ fun InstructionsScreen(
                                     "  - Single 5: 50 points\n" +
                                     "  - Three of a Kind: Number × 100 (e.g., three 2s = 200)\n" +
                                     "  - Three 1s: 1000 points\n" +
-                                    "  - Four of a Kind: Three of a kind × 2\n" +
-                                    "  - Five of a Kind: Four of a kind × 2\n" +
-                                    "  - Six of a Kind: Five of a kind × 2\n" +
+                                    "  - Five of a Kind: 2000 points\n" +
+                                    "  - Six of a Kind: 3000 points\n" +
                                     "  - Straight (1-2-3-4-5-6): 1000 points\n" +
-                                    "  - Three Pairs: 1000 points\n" +
+                                    "  - Three Pairs: 1500 points\n" +
                                     "First to 10,000 points wins." +
                                     "\n\n" +
                                     "• Balut Dice Game: Use five dice with these scoring categories:\n" +
@@ -205,9 +204,8 @@ fun InstructionsScreen(
                                             "  - Single 5: 50 points\n" +
                                             "  - Three of a Kind: Number × 100 (e.g., three 2s = 200)\n" +
                                             "  - Three 1s: 1000 points\n" +
-                                            "  - Four of a Kind: Three of a kind × 2\n" +
-                                            "  - Five of a Kind: Four of a kind × 2\n" +
-                                            "  - Six of a Kind: Five of a kind × 2\n" +
+                                            "  - Five of a Kind: 2000 points\n" +
+                                            "  - Six of a Kind: 3000 points\n" +
                                             "  - Straight (1-2-3-4-5-6): 1000 points\n" +
                                             "  - Three Pairs: 1000 points\n" +
                                             "First to 10,000 points wins." +

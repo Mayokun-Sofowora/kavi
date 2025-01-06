@@ -13,6 +13,12 @@ import com.mayor.kavi.ui.screens.main.*
 import com.mayor.kavi.ui.components.AnalyticsDashboard
 import com.mayor.kavi.ui.screens.main.LeaderboardScreen
 import com.mayor.kavi.ui.viewmodel.*
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 
 sealed class NavigationGraph(val route: String) {
     object Auth : NavigationGraph("auth_graph")
@@ -72,7 +78,19 @@ fun AppNavigation() {
         // Auth Navigation Graph
         navigation(
             startDestination = Screen.SignIn.route,
-            route = NavigationGraph.Auth.route
+            route = NavigationGraph.Auth.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { 1000 },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -1000 },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
         ) {
             composable(Screen.SignIn.route) {
                 SignInScreen(navController)
@@ -85,7 +103,19 @@ fun AppNavigation() {
         // Main Navigation Graph
         navigation(
             startDestination = Screen.MainMenu.route,
-            route = NavigationGraph.Main.route
+            route = NavigationGraph.Main.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { 1000 },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -1000 },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
         ) {
             composable(Screen.MainMenu.route) {
                 MainMenuScreen(navController)
@@ -117,7 +147,19 @@ fun AppNavigation() {
         // Game Navigation Graph
         navigation(
             startDestination = Screen.Start.route,
-            route = NavigationGraph.Game.route
+            route = NavigationGraph.Game.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { 1000 },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -1000 },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
         ) {
             composable(Screen.Start.route) {
                 InterfaceModeScreen(navController, appViewModel)

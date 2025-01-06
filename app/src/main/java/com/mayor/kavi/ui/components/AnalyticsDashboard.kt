@@ -267,13 +267,14 @@ private fun AchievementItem(name: String, progress: Float) {
     }
 }
 
-private fun formatTime(milliseconds: Long): String {
-    val seconds = milliseconds / 1000
-    val minutes = seconds / 60
-    val hours = minutes / 60
+private fun formatTime(timeInMillis: Long): String {
+    val seconds = (timeInMillis / 1000) % 60
+    val minutes = (timeInMillis / (1000 * 60)) % 60
+    val hours = (timeInMillis / (1000 * 60 * 60))
+
     return when {
-        hours > 0 -> "${hours}h ${minutes % 60}m"
-        minutes > 0 -> "${minutes}m ${seconds % 60}s"
-        else -> "${seconds}s"
+        hours > 0 -> String.format("%dh %02dm", hours, minutes)
+        minutes > 0 -> String.format("%dm %02ds", minutes, seconds)
+        else -> String.format("%ds", seconds)
     }
 } 

@@ -102,7 +102,7 @@ class AuthRepositoryTest {
         verify(userRepository).getUserById(testUserId)
     }
 
-    @Test
+    @Test // retest
     fun `signInUser with username succeeds`() = runTest {
         val username = "testuser"
         val email = "test@example.com"
@@ -188,7 +188,7 @@ class AuthRepositoryTest {
         verify(documentReference).set(any(), any())
     }
 
-    @Test
+    @Test // retest
     fun `createUser succeeds with valid email`() = runTest {
         val username = "new-user"
         val email = "test@example.com"

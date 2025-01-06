@@ -1,4 +1,4 @@
-package com.mayor.kavi.data.manager.games
+package com.mayor.kavi.game
 
 import com.mayor.kavi.data.manager.StatisticsManager
 import com.mayor.kavi.data.models.GameScoreState.BalutScoreState
@@ -222,7 +222,7 @@ class BalutGameManager @Inject constructor(
                 "Small Straight" -> if (baseScore > 0) baseScore * 1.6 else 0.0
                 "Four of a Kind" -> if (baseScore > 0) baseScore * 1.5 else 0.0
                 "Full House" -> if (baseScore > 0) baseScore * 1.4 else 0.0
-                
+
                 // Number categories - prioritize based on count
                 "Ones" -> {
                     val count = diceResults.count { it == 1 }
@@ -248,7 +248,7 @@ class BalutGameManager @Inject constructor(
                     val count = diceResults.count { it == 6 }
                     weightNumberCategory(baseScore, count)
                 }
-                
+
                 // Choice is last resort, but weight based on total
                 "Choice" -> {
                     val total = diceResults.sum()
@@ -265,12 +265,12 @@ class BalutGameManager @Inject constructor(
         // Consider game state for final decision
         val roundsLeft = CATEGORIES.size - currentState.currentRound
         val bestCategory = categoryScores.maxByOrNull { it.value }?.key ?: availableCategories.first()
-        
+
         // If near end game and haven't used Choice, prefer it for good rolls
         if (roundsLeft <= 2 && "Choice" in availableCategories && diceResults.sum() >= 20) {
             return "Choice"
         }
-        
+
         return bestCategory
     }
 

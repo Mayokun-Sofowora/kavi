@@ -1,5 +1,6 @@
 package com.mayor.kavi.authentication.signin
 
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.AuthCredential
@@ -102,7 +103,7 @@ class SignInViewModel @Inject constructor(
             )
             return false
         }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        if (!isValidEmail(email)) {
             _signInState.value = SignInState(
                 isLoading = false,
                 toastMessage = "Invalid email format"
@@ -112,4 +113,12 @@ class SignInViewModel @Inject constructor(
         return true
     }
 
+    private fun isValidEmail(email: String): Boolean {
+        return try {
+            Patterns.EMAIL_ADDRESS.matcher(email).matches()
+        } catch (_: Exception) {
+            // Fallback for tests or when Patterns is not available
+            email.matches(Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"))
+        }
+    }
 }

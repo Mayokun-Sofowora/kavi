@@ -151,21 +151,21 @@ class GreedGameManager @Inject constructor(
     }
 
     private fun handleAITurn(
-        diceResults: List<Int>, currentState: GreedScoreState
+        diceResults: List<Int>,
+        currentState: GreedScoreState
     ): GreedScoreState {
-        if (!currentState.canReroll) {
+        // If we can't reroll or have no available dice, bank
+        if (!currentState.canReroll ||
+            (currentState.heldDice.size + currentState.scoringDice.size) == diceResults.size) {
             return bankScore(currentState)
         }
 
+        // Calculate available dice and their scores
         val availableDice = diceResults.indices.toSet() - currentState.heldDice - currentState.scoringDice
-        if (availableDice.isEmpty()) {
-            return bankScore(currentState)
-        }
-
         val newDiceResults = availableDice.map { diceResults[it] }
         val (score, scoringDice) = ScoreCalculator.calculateGreedScore(newDiceResults)
 
-        // If no scoring dice in new roll, lose all accumulated points
+        // If no scoring dice in new roll, bust
         if (scoringDice.isEmpty()) {
             return currentState.copy(
                 currentTurnScore = 0,
@@ -177,21 +177,39 @@ class GreedGameManager @Inject constructor(
             )
         }
 
+        // Calculate new scores
         val newTurnScore = currentState.currentTurnScore + score
+        val currentBankedScore = currentState.playerScores[currentState.currentPlayerIndex] ?: 0
+
+        // Convert scoring dice indices to match original dice array
         val newScoringDiceIndices = scoringDice.map { availableDice.elementAt(it) }.toSet()
-        
+
         // Check for hot dice (all dice scoring)
         val allDiceScoring = (currentState.scoringDice + newScoringDiceIndices).size == diceResults.size
-        val finalHeldDice = if (allDiceScoring) emptySet() else decideAIDiceHolds(newScoringDiceIndices)
-        val finalScoringDice = if (allDiceScoring) emptySet() else (currentState.scoringDice + newScoringDiceIndices)
 
-        // AI decision to bank or continue
-        val shouldBank = shouldAIBank(newTurnScore, currentState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0)
+        // Decide which dice to hold (unless we have hot dice)
+        val finalHeldDice = if (allDiceScoring) {
+            emptySet() // Hot dice - must reroll all
+        } else {
+            decideAIDiceHolds(
+                currentScore = newTurnScore,
+                scoringCombos = newScoringDiceIndices
+            )
+        }
 
-        if (shouldBank && !allDiceScoring) {
+        // Update scoring dice set
+        val finalScoringDice = if (allDiceScoring) {
+            emptySet() // Hot dice - clear scoring dice
+        } else {
+            currentState.scoringDice + newScoringDiceIndices
+        }
+
+        // Decide whether to bank
+        if (!allDiceScoring && shouldAIBank(newTurnScore, currentBankedScore)) {
             return bankScore(currentState.copy(currentTurnScore = newTurnScore))
         }
 
+        // Continue rolling
         return currentState.copy(
             heldDice = finalHeldDice,
             currentTurnScore = newTurnScore,
@@ -201,30 +219,71 @@ class GreedGameManager @Inject constructor(
         )
     }
 
-    private fun shouldAIBank(currentTurnScore: Int, aiTotalScore: Int): Boolean {
-        // If AI can win by banking, always bank
+    fun shouldAIBank(currentTurnScore: Int, aiTotalScore: Int): Boolean {
+        // Always bank if we can win
         if (aiTotalScore + currentTurnScore >= WINNING_SCORE) return true
 
-        if (aiTotalScore == 0 && currentTurnScore < MINIMUM_STARTING_SCORE) {
-            return false // Keep rolling until we get at least minimum score
-        }
+        // Never bank below minimum unless we already have points banked
+        if (currentTurnScore < MINIMUM_STARTING_SCORE && aiTotalScore == 0) return false
 
         val playerAnalysis = statisticsManager.playerAnalysis.value
-        val baseRiskThreshold = when (playerAnalysis?.playStyle) {
-            PlayStyle.AGGRESSIVE -> 0.7  // More likely to roll
-            PlayStyle.CAUTIOUS -> 0.4   // More likely to bank
+
+        // Base threshold for banking decision
+        val baseThreshold = when (playerAnalysis?.playStyle) {
+            PlayStyle.AGGRESSIVE -> 1200  // Riskier play against aggressive players
+            PlayStyle.CAUTIOUS -> 900    // Bank earlier against cautious players
+            else -> 1000                 // Default threshold
+        }
+
+        // Adjust threshold based on game situation
+        val situationalAdjustment = when {
+            aiTotalScore == 0 -> -200  // More willing to risk when no points banked
+            aiTotalScore >= 8000 -> -300  // More aggressive when close to winning
+            currentTurnScore >= 2000 -> 500  // More likely to bank big scores
+            else -> 0
+        }
+
+        val finalThreshold = (baseThreshold + situationalAdjustment).coerceIn(800, 2000)
+
+        // Random factor to make AI less predictable (±100 points)
+        val randomFactor = Random.nextInt(-100, 101)
+
+        return currentTurnScore >= finalThreshold + randomFactor
+    }
+
+    /**
+     * Decides which scoring dice the AI should hold based on game state and score potential
+     *
+     * @param currentScore Current turn score
+     * @param scoringCombos Map of dice indices to their scoring combinations
+     * @return Set of dice indices to hold
+     */
+    private fun decideAIDiceHolds(
+        currentScore: Int,
+        scoringCombos: Set<Int>
+    ): Set<Int> {
+        // If we have a good scoring combination, hold it
+            if (currentScore >= 800) {
+                return scoringCombos
+            }
+
+        // Base decision on player analysis and current scores
+        val playerAnalysis = statisticsManager.playerAnalysis.value
+        val riskTolerance = when (playerAnalysis?.playStyle) {
+            PlayStyle.AGGRESSIVE -> 0.7  // More likely to hold scoring dice
+            PlayStyle.CAUTIOUS -> 0.4    // More likely to reroll
             else -> 0.55
         }
 
-        // Increase risk threshold based on turn score and whether we've reached minimum
-        val scoreMultiplier = if (aiTotalScore == 0) {
-            (currentTurnScore.toFloat() / MINIMUM_STARTING_SCORE).coerceAtMost(1.5f)
-        } else {
-            (currentTurnScore.toFloat() / MINIMUM_STARTING_SCORE).coerceAtMost(2f)
-        }
-        val adjustedThreshold = (baseRiskThreshold * scoreMultiplier).coerceAtMost(0.9)
+        // Adjust risk based on current turn score
+        val scoreMultiplier = (currentScore / 500.0).coerceAtMost(2.0)
 
-        return Random.nextDouble() > adjustedThreshold
+        // If random roll is below adjusted risk tolerance, hold the dice
+        return if (Random.nextDouble() < riskTolerance * scoreMultiplier) {
+            scoringCombos
+        } else {
+            emptySet() // Reroll all dice
+        }
     }
 
     /**
@@ -266,18 +325,18 @@ class GreedGameManager @Inject constructor(
         return scores.values.any { it >= WINNING_SCORE }
     }
 
-    private fun decideAIDiceHolds(scoringDice: Set<Int>): Set<Int> {
-        val playerAnalysis = statisticsManager.playerAnalysis.value
-        val aiAggressiveness = when (playerAnalysis?.playStyle) {
-            PlayStyle.AGGRESSIVE -> 0.8
-            PlayStyle.CAUTIOUS -> 0.5
-            else -> 0.6
-        }
-
-        return if (Random.nextDouble() < aiAggressiveness) {
-            scoringDice
-        } else {
-            emptySet()
-        }
-    }
+//    private fun decideAIDiceHolds(scoringDice: Set<Int>): Set<Int> {
+//        val playerAnalysis = statisticsManager.playerAnalysis.value
+//        val aiAggressiveness = when (playerAnalysis?.playStyle) {
+//            PlayStyle.AGGRESSIVE -> 0.8
+//            PlayStyle.CAUTIOUS -> 0.5
+//            else -> 0.6
+//        }
+//
+//        return if (Random.nextDouble() < aiAggressiveness) {
+//            scoringDice
+//        } else {
+//            emptySet()
+//        }
+//    }
 }

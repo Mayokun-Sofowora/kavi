@@ -19,8 +19,6 @@ class SettingsManager @Inject constructor(@ApplicationContext context: Context) 
         private val VIBRATION_ENABLED_KEY = booleanPreferencesKey("VIBRATION_ENABLED_KEY")
         private val BOARD_COLOR_KEY = stringPreferencesKey("BOARD_COLOR_KEY")
 
-        const val DEFAULT_BOARD_COLOR = "default"
-
         val BOARD_COLORS = BoardColors.getAvailableColors()
 
         val LocalSettingsManager = staticCompositionLocalOf<SettingsManager> {

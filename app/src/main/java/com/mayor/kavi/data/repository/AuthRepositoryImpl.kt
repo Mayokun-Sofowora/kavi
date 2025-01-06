@@ -25,8 +25,9 @@ class AuthRepositoryImpl @Inject constructor(
         if (currentUser == null) return false
 
         // Allow both Google Sign-In and email/password users
-        val isGoogleUser = currentUser.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
-        
+        val isGoogleUser =
+            currentUser.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
+
         // If not a Google user and email isn't verified, sign out
         if (!isGoogleUser && !currentUser.isEmailVerified) {
             signOut()
@@ -35,7 +36,7 @@ class AuthRepositoryImpl @Inject constructor(
 
         // Check if user exists in Firestore
         try {
-            val userDoc = firebaseFirestore.collection("users")
+            firebaseFirestore.collection("users")
                 .document(currentUser.uid)
                 .get()
                 .addOnSuccessListener { document ->
@@ -82,27 +83,28 @@ class AuthRepositoryImpl @Inject constructor(
                         "No user found with this username"
                     )
             }
-            
+
             // Sign in with email and password
             signOut() // Ensure any previous session is cleared
             val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val user = authResult.user ?: throw Exception("Authentication failed")
-            
+
             // Check if email is verified for non-Google users
-            val isGoogleUser = user.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
+            val isGoogleUser =
+                user.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
             if (!isGoogleUser && !user.isEmailVerified) {
                 signOut() // Sign out since email isn't verified
                 user.sendEmailVerification().await()
                 emit(Result.Error("Please verify your email address. A verification email has been sent."))
                 return@flow
             }
-            
+
             // Check if user exists in Firestore
             val userDoc = firebaseFirestore.collection("users")
                 .document(user.uid)
                 .get()
                 .await()
-                
+
             if (!userDoc.exists()) {
                 signOut() // Sign out since profile doesn't exist
                 emit(Result.Error("No user profile found. Please create an account first."))
@@ -119,7 +121,7 @@ class AuthRepositoryImpl @Inject constructor(
                     )
                 )
                 .await()
-                
+
             emit(Result.Success(authResult))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             emit(Result.Error("Invalid credentials", e))
@@ -149,10 +151,10 @@ class AuthRepositoryImpl @Inject constructor(
             // Create the user
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val user = authResult.user ?: throw Exception("Failed to create user")
-            
+
             // Send email verification
             user.sendEmailVerification().await()
-            
+
             // Save profile to Firestore
             val profile = UserProfile(
                 id = user.uid,
@@ -169,7 +171,7 @@ class AuthRepositoryImpl @Inject constructor(
                 .document(user.uid)
                 .set(profile)
                 .await()
-                
+
             emit(Result.Success(authResult))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "An unknown error occurred", e))
@@ -191,12 +193,12 @@ class AuthRepositoryImpl @Inject constructor(
             signOut() // Ensure any previous session is cleared
             val authResult = firebaseAuth.signInWithCredential(credential).await()
             val user = authResult.user ?: throw Exception("Authentication failed")
-            
+
             val userDoc = firebaseFirestore.collection("users")
                 .document(user.uid)
                 .get()
                 .await()
-                
+
             if (!userDoc.exists()) {
                 // Create a profile for the Google user
                 val profile = UserProfile(
@@ -210,7 +212,7 @@ class AuthRepositoryImpl @Inject constructor(
                     isWaitingForPlayers = false,
                     currentGameId = ""
                 )
-                
+
                 firebaseFirestore.collection("users")
                     .document(user.uid)
                     .set(profile)
@@ -227,7 +229,7 @@ class AuthRepositoryImpl @Inject constructor(
                     )
                     .await()
             }
-            
+
             emit(Result.Success(authResult))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Authentication failed", e))
@@ -236,19 +238,18 @@ class AuthRepositoryImpl @Inject constructor(
 
     override fun signOut() {
         try {
-            // Clear any cached credentials first
+            firebaseAuth.signOut()
             val currentUser = firebaseAuth.currentUser
             if (currentUser != null) {
-                for (userInfo in currentUser.providerData) {
-                    if (userInfo.providerId == GoogleAuthProvider.PROVIDER_ID) {
-                        // Force refresh to clear any cached credentials
-                        currentUser.getIdToken(true)
+                firebaseFirestore.clearPersistence().addOnSuccessListener {
+                    for (userInfo in currentUser.providerData) {
+                        if (userInfo.providerId == GoogleAuthProvider.PROVIDER_ID) {
+                            // Force refresh to clear any cached credentials
+                            currentUser.getIdToken(true)
+                        }
                     }
                 }
             }
-            firebaseAuth.signOut()
-            // Clear any local data
-            firebaseFirestore.clearPersistence()
         } catch (e: Exception) {
             // Log but don't throw as we still want to complete sign out
             println("Error during sign out: ${e.message}")

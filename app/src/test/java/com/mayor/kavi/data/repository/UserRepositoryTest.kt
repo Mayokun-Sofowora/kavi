@@ -8,7 +8,6 @@ import com.mayor.kavi.data.models.Avatar
 import com.mayor.kavi.data.models.UserProfile
 import com.mayor.kavi.util.Result
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -30,8 +29,7 @@ class UserRepositoryTest {
     private lateinit var currentUser: FirebaseUser
     @Mock
     private lateinit var documentSnapshot: DocumentSnapshot
-    @Mock
-    private lateinit var querySnapshot: QuerySnapshot
+
     @Mock
     private lateinit var documentReference: DocumentReference
     @Mock
@@ -95,43 +93,7 @@ class UserRepositoryTest {
         assertEquals("Player", profile.name)
         assertEquals("", profile.email)
         assertEquals(Avatar.DEFAULT, profile.avatar)
-    }
-
-    @Test
-    fun `setUserOnlineStatus updates status for existing user`() = runTest {
-        whenever(documentReference.get()).thenReturn(Tasks.forResult(documentSnapshot))
-        whenever(documentSnapshot.exists()).thenReturn(true)
-        whenever(documentReference.update(any())).thenReturn(Tasks.forResult(null))
-
-        val result = repository.setUserOnlineStatus(true)
-
-        assertTrue(result is Result.Success)
-        verify(documentReference).update(check {
-            assertEquals(true, it["isOnline"])
-            assertTrue(it.containsKey("lastSeen"))
-        })
-    }
-
-    @Test
-    fun `setUserGameStatus updates game status successfully`() = runTest {
-        val gameId = "test-game"
-        whenever(documentReference.update(any<Map<String, Any>>()))
-            .thenReturn(Tasks.forResult(null))
-
-        val result = repository.setUserGameStatus(
-            isInGame = true,
-            isWaitingForPlayers = false,
-            gameId = gameId
-        )
-
-        assertTrue(result is Result.Success)
-        verify(documentReference).update(check {
-            assertEquals(true, it["isInGame"])
-            assertEquals(false, it["isWaitingForPlayers"])
-            assertEquals(gameId, it["currentGameId"])
-            assertTrue(it.containsKey("lastSeen"))
-        })
-    }
+    } // retest this
 
     @Test
     fun `updateUserProfile updates profile successfully`() = runTest {
@@ -156,57 +118,6 @@ class UserRepositoryTest {
             },
             eq(SetOptions.merge())
         )
-    }
-
-    @Test
-    fun `getAllPlayers returns list of all users`() = runTest {
-        val users = listOf(
-            UserProfile(id = "user1", name = "User 1"),
-            UserProfile(id = "user2", name = "User 2")
-        )
-
-        val mockDocuments = users.map { user ->
-            mock<DocumentSnapshot>().also {
-                whenever(it.toObject(UserProfile::class.java)).thenReturn(user)
-            }
-        }
-
-        whenever(collectionReference.get()).thenReturn(Tasks.forResult(querySnapshot))
-        whenever(querySnapshot.documents).thenReturn(mockDocuments)
-
-        val result = repository.getAllPlayers()
-        assertTrue(result is Result.Success)
-        assertEquals(users, result.data)
-    }
-
-    @Test
-    fun `listenForOnlinePlayers filters out current user`() = runTest {
-        val onlineUsers = listOf(
-            UserProfile(id = testUserId, name = "Current User", isOnline = true),
-            UserProfile(id = "other-user", name = "Other User", isOnline = true)
-        )
-
-        val mockQuery = mock<Query>()
-        val mockListenerRegistration = mock<ListenerRegistration>()
-        whenever(collectionReference.whereEqualTo("isOnline", true)).thenReturn(mockQuery)
-
-        whenever(mockQuery.addSnapshotListener(any())).thenAnswer { invocation ->
-            val listener = invocation.arguments[0] as EventListener<QuerySnapshot>
-
-            val mockDocuments = onlineUsers.map { user ->
-                mock<DocumentSnapshot>().also {
-                    whenever(it.toObject(UserProfile::class.java)).thenReturn(user)
-                }
-            }
-            whenever(querySnapshot.documents).thenReturn(mockDocuments)
-
-            listener.onEvent(querySnapshot, null)
-            mockListenerRegistration
-        }
-
-        val result = repository.listenForOnlinePlayers().first()
-        assertEquals(1, result.size)
-        assertEquals("other-user", result[0].id)
     }
 
 }

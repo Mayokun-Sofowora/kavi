@@ -1,0 +1,43 @@
+@startuml auth_sequence
+'sequence/auth_flow.puml
+
+actor User
+participant "SignInScreen" as UI
+participant "SignInViewModel" as VM
+participant "AuthRepository" as Repo
+participant "FirebaseAuth" as Auth
+participant "FirebaseFirestore" as DB
+
+User -> UI: Click Sign In
+activate UI
+
+UI -> VM: signIn(email, password)
+activate VM
+
+VM -> Repo: signInUser(email, password)
+activate Repo
+
+Repo -> Auth: signInWithEmailAndPassword()
+activate Auth
+
+alt Successful Authentication
+    Auth --> Repo: AuthResult
+    Repo -> DB: Get User Profile
+    activate DB
+    DB --> Repo: UserProfile
+    Repo --> VM: Success(AuthResult)
+    VM --> UI: Update UI State
+    UI --> User: Navigate to Main Menu
+else Authentication Failed
+    Auth --> Repo: Exception
+    Repo --> VM: Error(message)
+    VM --> UI: Show Error
+    UI --> User: Display Error Message
+end
+
+deactivate Auth
+deactivate Repo
+deactivate VM
+deactivate UI
+
+@enduml

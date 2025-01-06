@@ -200,6 +200,20 @@ fun StatisticsScreen(
             }
         }
     }
+
+    // Model retraining status
+    appViewModel.modelRetrainingStatus.collectAsState().value?.let { status ->
+        Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { /* dismiss */ }) {
+                    Text("OK")
+                }
+            }
+        ) {
+            Text(status)
+        }
+    }
 }
 
 @Composable

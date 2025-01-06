@@ -234,7 +234,7 @@ fun BoardThreeScreen(
                 }
             }
             // Game Info
-            item{ GameInfoCard(balutState) }
+            item { GameInfoCard(balutState) }
             // Score Categories
             item {
                 BalutCategoriesCard(
@@ -259,9 +259,8 @@ fun BoardThreeScreen(
     if (balutState.isGameOver) {
         EndGameDialog(
             balutState = balutState,
-            selectedCategory = selectedCategory,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = navController::navigateUp
+            onExit = { navController.exitGame() }
         )
     }
 
@@ -269,7 +268,7 @@ fun BoardThreeScreen(
     if (showExitGameDialog) {
         ExitDialog(
             onDismiss = { showExitGameDialog = false },
-            onConfirm = navController::navigateUp
+            onConfirm = { navController.exitGame() }
         )
     }
 }
@@ -375,18 +374,17 @@ private fun BalutCategoriesCard(
 @Composable
 private fun EndGameDialog(
     balutState: GameScoreState.BalutScoreState,
-    selectedCategory: String?,
     onPlayAgain: () -> Unit,
     onExit: () -> Unit
 ) {
-    val currentScore = balutState.playerScores[balutState.currentPlayerIndex]?.values?.sum() ?: 0
+    val playerScore = balutState.playerScores[0]?.values?.sum() ?: 0
+    val aiScore = balutState.playerScores[GameViewModel.AI_PLAYER_ID.hashCode()]?.values?.sum() ?: 0
+    val isPlayerWinner = playerScore > aiScore
     GameEndDialog(
-        message = GameMessages.buildBalutCategoryMessage(
-            category = selectedCategory ?: "",
-            playerIndex = balutState.currentPlayerIndex,
-            isGameOver = true,
-            totalScore = currentScore
-        ),
+        message = "Your Score: $playerScore\n" +
+                "AI Score: $aiScore\n\n" +
+                if (isPlayerWinner) "You win with $playerScore points!"
+                else "AI wins with $aiScore points. Better luck next time!",
         onPlayAgain = onPlayAgain,
         onExit = onExit
     )

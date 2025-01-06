@@ -1,12 +1,13 @@
 package com.mayor.kavi.viewmodel
 
 import android.content.Context
+import com.google.firebase.firestore.FirebaseFirestore
+import com.mayor.kavi.data.manager.StatisticsManager
 import com.mayor.kavi.data.models.UserProfile
 import com.mayor.kavi.data.repository.*
 import com.mayor.kavi.ui.viewmodel.AppViewModel
 import com.mayor.kavi.util.Result
 import io.mockk.*
-import junit.framework.TestCase.assertFalse
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.junit.After
@@ -20,6 +21,8 @@ class AppViewModelTest {
     private lateinit var appViewModel: AppViewModel
     private lateinit var userRepository: UserRepository
     private lateinit var authRepository: AuthRepository
+    private lateinit var statisticsManager: StatisticsManager
+    private lateinit var firebaseFirestore: FirebaseFirestore
     private lateinit var context: Context
     private lateinit var testDispatcher: TestDispatcher
     private lateinit var testScope: TestScope
@@ -33,6 +36,8 @@ class AppViewModelTest {
         context = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
+        statisticsManager = mockk(relaxed = true)
+        firebaseFirestore = mockk(relaxed = true)
 
         coEvery { userRepository.getCurrentUserId() } returns "test-user"
         coEvery { authRepository.isUserSignedIn() } returns false
@@ -40,7 +45,9 @@ class AppViewModelTest {
         appViewModel = AppViewModel(
             context = context,
             userRepository = userRepository,
-            authRepository = authRepository
+            authRepository = authRepository,
+            statisticsManager = statisticsManager,
+            firebaseFirestore = firebaseFirestore
         )
     }
 
@@ -65,21 +72,4 @@ class AppViewModelTest {
         assertEquals(profile, (appViewModel.userProfileState.value as Result.Success).data)
     }
 
-    @Test
-    fun `test login completion`() = runTest {
-        // Act
-        appViewModel.updateLogin()
-        advanceUntilIdle()
-
-        // Assert
-        assertTrue(appViewModel.loginComplete.value)
-
-        // Act - complete login
-        appViewModel.onLoginComplete()
-        advanceUntilIdle()
-
-        // Assert
-        assertFalse(appViewModel.loginComplete.value)
-        coVerify { userRepository.setUserOnlineStatus(true) }
-    }
 }

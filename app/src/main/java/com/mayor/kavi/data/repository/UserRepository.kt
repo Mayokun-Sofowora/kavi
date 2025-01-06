@@ -12,12 +12,4 @@ interface UserRepository {
     suspend fun getUserById(userId: String): Result<UserProfile>
     suspend fun updateUserProfile(profile: UserProfile): Result<UserProfile>
     suspend fun getCurrentUser(): Result<UserProfile>
-    suspend fun getAllPlayers(): Result<List<UserProfile>>
-    suspend fun setUserOnlineStatus(isOnline: Boolean): Result<Unit>
-    fun listenForOnlinePlayers(): Flow<List<UserProfile>>
-    suspend fun setUserGameStatus(
-        isInGame: Boolean,
-        isWaitingForPlayers: Boolean,
-        gameId: String
-    ): Result<Unit>
 }

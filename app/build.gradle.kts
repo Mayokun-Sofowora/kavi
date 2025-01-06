@@ -3,11 +3,10 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.dagger.hilt.android") version "2.51.1"
-    id("com.google.gms.google-services") version "4.3.15"
-    id("com.google.devtools.ksp") version "2.0.21-1.0.27"
-    id("org.jetbrains.dokka") version "1.9.20"
-    id("com.google.firebase.crashlytics") version "2.9.5"
     kotlin("plugin.serialization") version "2.0.21"
+    id("com.google.firebase.crashlytics") version "3.0.2"
+    id("com.google.devtools.ksp") version "2.0.21-1.0.27"
+    id("com.google.gms.google-services") version "4.4.2"
 }
 
 android {
@@ -29,11 +28,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
     compileOptions {
@@ -52,11 +56,37 @@ android {
     }
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}", "/META-INF/LICENSE.md", "META-INF/LICENSE-notice.md",
+                "META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/NOTICE",
+                "META-INF/NOTICE.txt", "META-INF/DEPENDENCIES", "META-INF/AL2.0",
+                "META-INF/LGPL2.1", "META-INF/plexus/components.xml",
+                "META-INF/services/javax.annotation.processing.Processor",
+                "META-INF/*.version", "META-INF/*.kotlin_module"
+            )
+            pickFirsts += setOf(
+                // If there are still conflicts, pick the first occurrence
+                "META-INF/LICENSE.md", "META-INF/LICENSE-notice.md", "META-INF/LICENSE.txt",
+                "META-INF/NOTICE.txt", "META-INF/DEPENDENCIES"
+            )
+            merges += setOf(
+                // Merge similar files
+                "META-INF/services/*",
+                "META-INF/spring.*"
+            )
         }
     }
     viewBinding {
         enable = true
+    }
+
+    // Add size optimization configurations
+    configurations.all {
+        exclude(group = "com.google.android.gms", module = "play-services-games")
+        exclude(group = "com.google.android.play", module = "integrity")
+    }
+    lint {
+        disable += "NotificationPermission"
     }
 }
 
@@ -70,7 +100,6 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-
     implementation("androidx.navigation:navigation-runtime-ktx:2.8.5")
     implementation("androidx.navigation:navigation-fragment-ktx:2.8.5")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
@@ -84,16 +113,13 @@ dependencies {
 
     // Kotlin Coroutine
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    // Libraries for Authentication, Analyzing and Cloud Firestore
+    // Firebase SDK
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
-    implementation("com.google.firebase:firebase-dynamic-links")
     // Dagger - Hilt Dependency Injector
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     implementation("com.google.dagger:hilt-android:2.51.1")
@@ -114,10 +140,6 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4") {
         exclude("org.tensorflow", "tensorflow-lite-support-api")
     }
-    // JSON De/Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    // Documentation library
-    implementation("org.jetbrains.dokka:android-documentation-plugin:1.9.20")
     // Splash Screen
     implementation("androidx.core:core-splashscreen:1.0.1")
     // Timber logger
@@ -129,52 +151,40 @@ dependencies {
     implementation("com.patrykandpatrick.vico:compose:1.12.0")
     implementation("com.patrykandpatrick.vico:compose-m3:1.12.0")
     implementation("com.patrykandpatrick.vico:core:1.12.0")
-    // AR and 3D rendering
-//    implementation("com.google.ar:core:1.40.0")
-//    implementation("com.google.android.filament:filament-android:1.45.0")
-//    implementation("com.google.android.filament:filament-utils-android:1.45.0")
-//    implementation("com.google.android.filament:gltfio-android:1.45.0")
 
     // Hilt Test
-    androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
     kspAndroidTest("com.google.dagger:hilt-android-compiler:2.51.1")
-    // Kotlin Coroutines Test
+    // Testing Dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    // Mockito Test
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+    testImplementation("io.mockk:mockk:1.13.9")
     testImplementation("org.mockito:mockito-core:5.8.0")
     testImplementation("org.mockito:mockito-inline:5.0.0")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.10.1")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
-    testImplementation ("io.mockk:mockk:1.13.9")
-    testImplementation ("junit:junit:4.13.2")
-    testImplementation(kotlin("test"))
-
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
-
-    // Testing Dependencies
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    testImplementation("io.mockk:mockk:1.13.9")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
     testImplementation("androidx.test:core:1.5.0")
-    testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
-    testImplementation("app.cash.turbine:turbine:1.0.0") // For Flow testing
-    
+    testImplementation("app.cash.turbine:turbine:1.0.0")
+    // Android Test Dependencies
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("io.mockk:mockk-android:1.13.9")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    // Debug Dependencies
+    debugImplementation(libs.androidx.ui.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.6")
+    debugImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
+    debugImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    debugImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+    debugImplementation("io.mockk:mockk:1.13.9")
+    debugImplementation("org.mockito:mockito-core:5.8.0")
+    debugImplementation("org.mockito:mockito-inline:5.0.0")
+    debugImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    debugImplementation("androidx.test:core:1.5.0")
+    debugImplementation("androidx.arch.core:core-testing:2.2.0")
+    debugImplementation("app.cash.turbine:turbine:1.0.0")
 }
 

@@ -62,6 +62,18 @@ class StatisticsRepositoryImpl @Inject constructor(
         Result.Error("Error updating player analysis", e)
     }
 
+    override suspend fun getAllUsersGameStatistics(): Result<List<GameStatistics>> = try {
+        val snapshot = firestore.collection("statistics")
+            .get()
+            .await()
+        val statistics = snapshot.documents.mapNotNull { doc ->
+            doc.toObject(GameStatistics::class.java)
+        }
+        Result.Success(statistics)
+    } catch (e: Exception) {
+        Result.Error("Error fetching game statistics", e)
+    }
+
     override suspend fun clearUserStatistics(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val currentUserId = getCurrentUserId()

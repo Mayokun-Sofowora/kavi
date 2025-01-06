@@ -1,0 +1,302 @@
+@startuml complete_class_diagram
+
+' Horizontal layout
+left to right direction
+
+' Or vertical layout (default)
+top to bottom direction
+
+skinparam linetype ortho
+
+
+namespace com.mayor.kavi #DDDDDD{
+    class MainActivity{
+       # onCreate(Bundle)
+       +onResume()
+       +onPause()
+       +checkGooglePlayServices()
+       +KaviApp(StatisticsManager, SettingsManager)
+    }
+    class KaviApplication{
+        + onCreate()
+    }
+    class AppNavigation {
+        + Navigation graph initialization
+        + AppNavigation()
+    }
+}
+
+' Screens (UI Layer)
+namespace com.mayor.kavi.ui.screens #DDDDDD {
+ class main{
+    + MainMenuScreen (NavController, AppViewModel)
+    + SettingsScreen(GameViewModel, NavController)
+    + InstructionsScreen(NavController,startPage: Int,showOnlyPage: Boolean)
+    + LeaderboardScreen (LeaderboardViewModel,NavController)
+    + StatisticsScreen (appViewModel: AppViewModel,gameViewModel: GameViewModel,navController: NavController)
+ }
+ class modes {
+    + InterfaceModeScreen (navController: NavController,viewModel: AppViewModel)
+    + BoardsScreen (viewModel: GameViewModel,navController: NavController)
+ }
+ class gameBoards {
+    + BoardOneScreen (navController: NavController,viewModel: GameViewModel)
+    + BoardTwoScreen (navController: NavController,viewModel: GameViewModel)
+    + BoardThreeScreen (navController: NavController,viewModel: GameViewModel)
+    + BoardFourScreen (navController: NavController,viewModel: GameViewModel)
+ }
+}
+
+' ViewModels
+namespace com.mayor.kavi.ui.viewmodel #DDDDDD{
+    class AppViewModel {
+      - context: Context
+      - userRepository: UserRepository
+      - authRepository: AuthRepository
+      - statisticsManager: StatisticsManager
+      - firebaseFirestore: FirebaseFirestore
+      + setInterfaceMode(mode: String)
+      + loadUserProfile()
+      + signOut()
+    }
+    class GameViewModel {
+      - context: Context
+      - pigGameManager: PigGameManager
+      - greedGameManager: GreedGameManager
+      - balutGameManager: BalutGameManager
+      - myGameManager: MyGameManager
+      - statisticsManager: StatisticsManager
+      - networkConnection: NetworkConnection
+      - shakeDetectionManager: ShakeDetectionManager
+      - diceManager: DiceManager
+      - userRepository: UserRepository
+      - leaderboardRepository: LeaderboardRepository
+      + setDiceCount(count: Int)
+      + addPlayer()
+      + updatePlayerName(playerIndex: Int, name: String)
+      + addScore(playerIndex: Int, score: Int)
+      + addNote(playerIndex: Int, note: String)
+    }
+    class LeaderboardViewModel{
+        -  leaderboardRepository: LeaderboardRepository
+        + loadLeaderboard()
+    }
+}
+package com.mayor.kavi.authentication{
+    class SignInViewModel{
+        - repository: AuthRepository
+        - userRepository: UserRepository
+        + signIn()
+        + googleSignIn()
+    }
+    class SignUpViewModel{
+        - repository: AuthRepository
+        - userRepository: UserRepository
+        + signUp()
+        + createUserProfile()
+    }
+     class SignIn {
+        + SignInScreen (navController: NavController,viewModel: SignInViewModel)
+     }
+     class SignUp {
+        + SignUpScreen (navController: NavController,viewModel: SignUpViewModel)
+     }
+}
+namespace com.mayor.kavi.data.manager #DDDDDD{
+    ' Game Managers
+    class PigGameManager {
+      - statisticsManager: StatisticsManager
+      + initializeGame(): PigScoreState
+    }
+    class GreedGameManager {
+      - statisticsManager: StatisticsManager
+      + initializeGame(): GreedScoreState
+    }
+    class BalutGameManager {
+      - statisticsManager: StatisticsManager
+      + initializeGame(): BalutScoreState
+     }
+    class MyGameManager {
+      + initializeGame(): CustomScoreState
+    }
+
+    ' Data Managers
+    class DataStoreManager {
+      - context: Context
+      - dataStore: DataStore<Preferences>
+      + {static} getInstance(context: Context): DataStoreManager
+      + setShakeEnabled(enabled: Boolean)
+      + setVibrationEnabled(enabled: Boolean
+      + setBoardColor(color: String)
+    }
+    class StatisticsManager{
+      - context: Context
+      - statisticsRepository: StatisticsRepository
+      - userRepository: UserRepository
+      - dispatcher: CoroutineDispatcher
+    }
+    class DiceManager{
+        + rollDiceForBoard(boardType: String): List<Int>
+        + toggleHold(index: Int, boardType: String)
+        + resetGame()
+        + getDiceImage(value: Int): Int
+    }
+    class ShakeDetectionManager{
+        - context: Context
+        - settingsManager: SettingsManager
+        - dispatcher: CoroutineDispatcher
+        + startListening()
+        + stopListening()
+    }
+    class SettingsManager{
+        - context: Context
+    }
+}
+
+' Repositories and their implementations
+namespace com.mayor.kavi.data.repository #DDDDDD{
+    interface AuthRepository{
+        + isUserSignedIn(): Boolean
+        + signInUser(identifier: String, password: String): Flow<Result<AuthResult>>
+        + createUser(username: String, email: String, password: String): Flow<Result<AuthResult>>
+        + saveUserProfileToFirestore(profileData: UserProfile, collection: String = "users")
+        + googleSignIn(credential: AuthCredential): Flow<Result<AuthResult>>
+        + signOut()
+    }
+    interface UserRepository{
+       + getUserById(userId: String): Result<List<UserProfile>>
+       + getCurrentUser(): Result<List<UserProfile>>
+       + updateUserProfile(profile: UserProfile): Result<List<UserProfile>>
+       + getCurrentUserId(): String?
+    }
+    interface LeaderboardRepository{
+        + getGlobalLeaderboard(): List<LeaderboardEntry>
+        + updateLeaderboardEntry(entry: LeaderboardEntry)
+    }
+    interface StatisticsRepository{
+        + getGameStatistics(): Result<GameStatistics>
+        + updateGameStatistics(stats: GameStatistics): Result<Unit>
+        + updatePlayerAnalysis(userId: String, analysis: PlayerAnalysis): Result<Unit>
+        + clearUserStatistics(): Result<Unit>
+    }
+
+    class AuthRepositoryImpl implements AuthRepository{
+        - firebaseAuth: FirebaseAuth
+        - firebaseFirestore: FirebaseFirestore
+        - userRepository: UserRepository
+        + isUserSignedIn(): Boolean
+        (...)
+    }
+    class UserRepositoryImpl implements UserRepository{
+        - firestore: FirebaseFirestore
+        - auth: FirebaseAuth
+        + getUserById(userId: String): Result<List<UserProfile>>
+        (...)
+    }
+    class LeaderboardRepositoryImpl implements LeaderboardRepository{
+        - firestore: FirebaseFirestore
+        + getGlobalLeaderboard(): List<LeaderboardEntry>
+        (...)
+    }
+    class StatisticsRepositoryImpl implements StatisticsRepository{
+        - firestore: FirebaseFirestore
+        - auth: FirebaseAuth
+        + getGameStatistics(): Result<GameStatistics>
+        (...)
+    }
+}
+
+' Relationships
+KaviApplication --> FirebaseApp : initializes
+KaviApplication --> Timber : initializes
+MainActivity --> KaviApplication : uses
+MainActivity --> AppNavigation : uses
+
+' Navigation to Screens
+AppNavigation ..> main : routes to
+AppNavigation ..> modes : routes to
+AppNavigation ..> gameBoards : routes to
+AppNavigation ..> SignIn : routes to
+AppNavigation ..> com.mayor.kavi.authentication : routes to
+
+' Screens to ViewModels
+main ..> AppViewModel : uses
+main ..> GameViewModel : uses
+main ..> LeaderboardViewModel : uses
+modes ..> AppViewModel : uses
+modes ..> GameViewModel : uses
+main ..> SettingsManager : uses
+gameBoards ..> GameViewModel : uses
+SignIn ..> SignInViewModel : uses
+SignUp ..> SignUpViewModel : uses
+
+' ViewModels to Managers
+GameViewModel *-- PigGameManager
+GameViewModel *-- GreedGameManager
+GameViewModel *-- BalutGameManager
+GameViewModel *-- MyGameManager
+GameViewModel *-- DiceManager
+GameViewModel *-- StatisticsManager
+GameViewModel *-- SettingsManager
+AppViewModel *-- DataStoreManager
+
+' ViewModels to Repositories
+AppViewModel ..> AuthRepository : uses
+AppViewModel ..> UserRepository : uses
+GameViewModel ..> LeaderboardRepository : uses
+GameViewModel ..> UserRepository : uses
+SignInViewModel ..> AuthRepository : uses
+SignUpViewModel ..> AuthRepository : uses
+
+' Managers to Repositories
+StatisticsManager ..> StatisticsRepository : uses
+StatisticsManager ..> UserRepository : uses
+
+
+' Main Application
+note right of MainActivity
+  Entry point of the application.
+  Handles lifecycle and initial setup.
+end note
+
+' ViewModels
+note right of GameViewModel
+  Manages game state and logic for all game variants:
+  - Handles dice rolling and scoring
+  - Manages player turns and game flow
+  - Coordinates between UI and game managers
+  - Handles game statistics and analysis
+end note
+
+note right of AppViewModel
+  Manages application-wide state:
+  - User authentication state
+  - Profile management
+  - Interface mode settings
+end note
+
+' Managers
+note right of StatisticsManager
+  Analyzes and tracks player performance:
+  - Calculates win rates and trends
+  - Manages player analytics
+  - Updates leaderboard data
+end note
+
+note right of DiceManager
+  Handles dice-related operations:
+  - Manages dice rolling mechanics
+  - Controls dice state and animations
+  - Handles shake-to-roll functionality
+end note
+
+' Repositories
+note right of AuthRepository
+  Manages authentication operations:
+  - Email/password authentication
+  - Google Sign-In
+  - User session management
+end note
+
+
+@enduml

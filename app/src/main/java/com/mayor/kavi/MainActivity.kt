@@ -21,6 +21,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * MainActivity class for the Kavi application, which is the main entry point of the application.
+ */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject
@@ -50,7 +53,10 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalUserRepository provides userRepository
                 ) {
-                    KaviApp(statisticsManager = statisticsManager, settingsManager = settingsManager)
+                    KaviApp(
+                        statisticsManager = statisticsManager,
+                        settingsManager = settingsManager
+                    )
                 }
             }
         }

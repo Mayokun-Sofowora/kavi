@@ -1,0 +1,44 @@
+@startuml game_system_use_case
+'usecase/game_system_use_case.puml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam UseCaseBackgroundColor #E8F8F5
+
+actor "Player" as player
+
+rectangle "Game System" {
+    package "Board Selection" {
+        usecase "Select Board" as UC1
+        usecase "View Settings" as UC2
+        usecase "Change Board Color" as UC3
+        usecase "View Game Rules" as UC4
+    }
+
+    package "Gameplay" {
+        usecase "Start Game" as UC5
+        usecase "Roll Dice" as UC6
+        usecase "Bank or Save Score Points" as UC7
+        usecase "End Game" as UC8
+        usecase "Update Statistics and Analysis" as UC9
+    }
+}
+
+' Player primary interactions
+player -- UC1
+player -- UC5
+
+' Board Selection relationships
+UC2 .> UC1 : <<extend>>
+UC3 .> UC2 : <<extend>>
+UC4 .> UC2 : <<extend>>
+
+' Gameplay relationships
+UC5 ..> UC6 : <<include>>
+UC8 ..> UC9 : <<include>>
+UC7 .> UC6 : <<extend>>
+
+' Connection between packages
+UC1 ..> UC5 : <<include>>
+
+@enduml

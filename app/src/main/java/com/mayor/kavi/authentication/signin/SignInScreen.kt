@@ -158,7 +158,7 @@ fun SignInScreen(
                         launcher.launch(
                             IntentSenderRequest.Builder(result.pendingIntent.intentSender).build()
                         )
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         Toast.makeText(
                             context,
                             "No Google accounts found",
@@ -210,12 +210,26 @@ fun SignInScreen(
             if (authResult.user != null) {
                 // Check if user has a profile in Firestore
                 launch {
-                    val userProfile = viewModel.getUserProfile(authResult.user?.uid ?: "")
-                    if (userProfile != null) {
-                        navController.navigateToMainMenu()
+                    val userId = authResult.user?.uid
+                    if (userId != null) {
+                        val userProfile = viewModel.getUserProfile(userId)
+                        if (userProfile != null) {
+                            navController.navigateToMainMenu()
+                        } else {
+                            // User doesn't have a profile, navigate to sign up
+                            Toast.makeText(
+                                context,
+                                "User doesn't have a profile",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     } else {
-                        // User doesn't have a profile, navigate to sign up
-                        navController.navigateToSignUp()
+                        // Handle the case where we don't have a valid user ID
+                        Toast.makeText(
+                            context,
+                            "Authentication error: Invalid user ID",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
             }

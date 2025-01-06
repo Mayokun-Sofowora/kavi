@@ -1,0 +1,54 @@
+@startuml auth_use_case
+'usecase/auth_usecase.puml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam UseCaseBackgroundColor #E8F8F5
+skinparam linetype ortho
+
+
+' Actors
+actor "Guest User" as guest
+actor "Authenticated User" as auth_user
+
+rectangle "Authentication" {
+    usecase "Sign Up" as UC1
+    usecase "Sign In" as UC2
+    usecase "Sign In with Google" as UC3
+    usecase "Reset Password" as UC4
+    usecase "Verify Email" as UC5
+    usecase "Sign Out" as UC6
+    usecase "Create User Profile" as UC7
+    usecase "Update Profile" as UC8
+    usecase "Check Auth Status" as UC9
+    usecase "Edit Username" as UC10
+    usecase "Change Avatar" as UC11
+    usecase "Delete Profile" as UC12
+}
+
+' Guest User relationships
+guest --- UC1
+guest -- UC2
+guest -- UC3
+guest -- UC4
+
+' Authenticated User relationships
+auth_user -- UC6
+auth_user -- UC8
+auth_user -- UC12
+
+' Include relationships
+UC1 ..> UC7 : <<include>>
+UC1 ..> UC5 : <<include>>
+UC2 ..> UC9 : <<include>>
+UC3 ..> UC7 : <<include>>
+UC6 ..> UC9 : <<include>>
+UC8 ..> UC10 : <<include>>
+UC8 ..> UC11 : <<include>>
+UC12 ..> UC6 : <<include>>
+
+' Extend relationships
+UC4 .> UC2 : <<extend>>
+UC3 .> UC2 : <<extend>>
+
+@enduml

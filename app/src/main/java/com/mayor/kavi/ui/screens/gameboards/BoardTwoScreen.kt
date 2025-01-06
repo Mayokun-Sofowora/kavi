@@ -17,6 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.mayor.kavi.R
 import com.mayor.kavi.data.manager.SettingsManager.Companion.LocalSettingsManager
+import com.mayor.kavi.data.manager.games.GreedGameManager
 import com.mayor.kavi.data.models.GameScoreState
 import com.mayor.kavi.ui.components.*
 import com.mayor.kavi.ui.viewmodel.GameViewModel
@@ -216,9 +217,8 @@ fun BoardTwoScreen(
 
                     val scoringCombinations = listOf(
                         "Straight (1-2-3-4-5-6): 1000",
-                        "Six of a Kind: Five of a kind × 2",
-                        "Five of a Kind: Four of a kind × 2",
-                        "Four of a Kind: Three of a kind × 2",
+                        "Six of a Kind: 3000 points",
+                        "Five of a Kind: 2000 points",
                         "Three Pairs: 1000",
                         "Three of a Kind (of 1): 1000",
                         "Three of a Kind: Number × 100",
@@ -264,7 +264,7 @@ fun BoardTwoScreen(
         EndGameDialog(
             greedState = greedState,
             onPlayAgain = { viewModel.resetGame() },
-            onExit = navController::navigateUp
+            onExit = { navController.exitGame() }
         )
     }
 
@@ -272,7 +272,7 @@ fun BoardTwoScreen(
     if (showExitGameDialog) {
         ExitDialog(
             onDismiss = { showExitGameDialog = false },
-            onConfirm = navController::navigateUp
+            onConfirm = { navController.exitGame() }
         )
     }
 }

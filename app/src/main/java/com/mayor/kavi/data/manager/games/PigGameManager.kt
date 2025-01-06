@@ -2,9 +2,11 @@ package com.mayor.kavi.data.manager.games
 
 import com.mayor.kavi.data.manager.StatisticsManager
 import com.mayor.kavi.data.models.GameScoreState
+import com.mayor.kavi.data.models.PlayStyle
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
 import javax.inject.Inject
 import kotlin.math.abs
+import kotlin.random.Random
 
 /**
  * Manager class for the Pig dice game variant.
@@ -185,15 +187,15 @@ class PigGameManager @Inject constructor(
     private fun checkIfComeback(state: GameScoreState.PigScoreState): Boolean {
         val playerScore = state.playerScores[0] ?: 0
         val aiScore = state.playerScores[AI_PLAYER_ID.hashCode()] ?: 0
-        // Consider it a comeback if player was behind by 30+ points
-        return state.currentPlayerIndex == 0 && (aiScore - playerScore) >= 30
+        // Consider it a comeback if player was behind by 50+ points
+        return state.currentPlayerIndex == 0 && (aiScore - playerScore) >= 50
     }
 
     private fun checkIfCloseGame(state: GameScoreState.PigScoreState): Boolean {
         val scores = state.playerScores.values.toList()
         if (scores.size != 2) return false
-        // Consider it a close game if the difference is 10 points or less
-        return abs(scores[0] - scores[1]) <= 10
+        // Consider it a close game if the difference is 5 points or less
+        return abs(scores[0] - scores[1]) <= 5
     }
 
     private fun switchTurn(state: GameScoreState.PigScoreState): GameScoreState.PigScoreState {
@@ -207,12 +209,52 @@ class PigGameManager @Inject constructor(
         )
     }
 
-    private fun shouldAIBank(
-        currentTurnScore: Int,
-        aiTotalScore: Int,
-        playerTotalScore: Int
-    ): Boolean {
-        // Use the AI logic from StatisticsManager
-        return statisticsManager.shouldAIBank(currentTurnScore, aiTotalScore, playerTotalScore)
+    fun shouldAIBank(currentTurnScore: Int, aiTotalScore: Int, playerTotalScore: Int): Boolean {
+        // If AI can win by banking, always bank
+        if (aiTotalScore + currentTurnScore >= WINNING_SCORE) return true
+
+        val currentState = GameScoreState.PigScoreState(
+            playerScores = mutableMapOf(
+                0 to playerTotalScore,
+                AI_PLAYER_ID.hashCode() to aiTotalScore
+            ),
+            currentPlayerIndex = AI_PLAYER_ID.hashCode(),
+            currentTurnScore = currentTurnScore,
+            isGameOver = false
+        )
+
+        val isCloseGame = checkIfCloseGame(currentState)
+        val wouldBeComeback = checkIfComeback(currentState)
+        val playerAnalysis = statisticsManager.playerAnalysis.value
+        val playerStyle = playerAnalysis?.playStyle ?: PlayStyle.BALANCED
+
+        // Base chance to bank increases with score
+        val baseChance = when {
+            currentTurnScore >= 20 -> 0.7
+            currentTurnScore >= 15 -> 0.5
+            currentTurnScore >= 10 -> 0.3
+            currentTurnScore >= 5 -> 0.2
+            else -> 0.1
+        }
+
+        // Adjust chance based on game situation
+        val situationalAdjustment = when {
+            isCloseGame -> 0.2  // More likely to bank in close games
+            wouldBeComeback -> -0.2  // Less likely to bank when behind
+            playerTotalScore >= 75 -> 0.3  // More likely to bank when player is close to winning
+            aiTotalScore >= 75 -> -0.1  // Less likely to bank when AI is close to winning
+            else -> 0.0
+        }
+
+        // Adjust based on player style
+        val styleAdjustment = when (playerStyle) {
+            PlayStyle.AGGRESSIVE -> -0.1  // Less likely to bank against aggressive players
+            PlayStyle.CAUTIOUS -> 0.1   // More likely to bank against cautious players
+            else -> 0.0
+        }
+
+        val finalChance = (baseChance + situationalAdjustment + styleAdjustment).coerceIn(0.1, 0.9)
+        return Random.nextDouble() < finalChance
     }
+
 }

@@ -1,6 +1,7 @@
 package com.mayor.kavi.data.manager.games
 
 import com.mayor.kavi.data.manager.StatisticsManager
+import com.mayor.kavi.game.BalutGameManager
 import com.mayor.kavi.ui.viewmodel.GameViewModel.Companion.AI_PLAYER_ID
 import org.junit.Before
 import org.junit.Test
@@ -30,7 +31,7 @@ class BalutGameManagerTest {
         assertTrue(gameState.playerScores[0]?.isEmpty() == true)
         assertTrue(gameState.playerScores[AI_PLAYER_ID.hashCode()]?.isEmpty() == true)
         assertEquals(1, gameState.currentRound)
-        assertEquals(BalutGameManager.MAX_ROLLS, gameState.rollsLeft)
+        assertEquals(BalutGameManager.Companion.MAX_ROLLS, gameState.rollsLeft)
         assertTrue(gameState.heldDice.isEmpty())
         assertFalse(gameState.isGameOver)
     }
@@ -61,7 +62,7 @@ class BalutGameManagerTest {
         // Verify scoring
         assertEquals(2, updatedState.playerScores[0]?.get("Ones"))
         assertEquals(AI_PLAYER_ID.hashCode(), updatedState.currentPlayerIndex)
-        assertEquals(BalutGameManager.MAX_ROLLS, updatedState.rollsLeft)
+        assertEquals(BalutGameManager.Companion.MAX_ROLLS, updatedState.rollsLeft)
     }
 
     @Test
@@ -109,14 +110,25 @@ class BalutGameManagerTest {
     }
 
     @Test
-    fun `test scoring straight`() {
+    fun `test scoring small straight`() {
+        val initialState = balutGameManager.initializeGame().copy(currentPlayerIndex = 0)
+        val diceResults = listOf(1, 2, 3, 4) // 1-4 small straight
+
+        val updatedState = balutGameManager.scoreCategory(initialState, diceResults, "Small Straight")
+
+        // Verify scoring
+        assertEquals(30, updatedState.playerScores[0]?.get("Small Straight"))
+    }
+
+    @Test
+    fun `test scoring large straight`() {
         val initialState = balutGameManager.initializeGame().copy(currentPlayerIndex = 0)
         val diceResults = listOf(1, 2, 3, 4, 5) // 1-5 straight
 
-        val updatedState = balutGameManager.scoreCategory(initialState, diceResults, "Straight")
+        val updatedState = balutGameManager.scoreCategory(initialState, diceResults, "Large Straight")
 
         // Verify scoring
-        assertEquals(30, updatedState.playerScores[0]?.get("Straight"))
+        assertEquals(40, updatedState.playerScores[0]?.get("Large Straight"))
     }
 
     @Test
@@ -133,7 +145,7 @@ class BalutGameManagerTest {
     @Test
     fun `test game completion`() {
         // Create a state where all categories are filled except one
-        val allCategories = BalutGameManager.CATEGORIES.associateWith { 10 }.toMutableMap()
+        val allCategories = BalutGameManager.Companion.CATEGORIES.associateWith { 10 }.toMutableMap()
         allCategories.remove("Choice") // Leave one category empty
         
         val initialState = balutGameManager.initializeGame().copy(

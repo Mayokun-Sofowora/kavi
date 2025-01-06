@@ -1,0 +1,93 @@
+@startuml simplified_class_diagram
+
+' Layout direction
+top to bottom direction
+skinparam linetype ortho
+
+' Application Layer
+package "Application" {
+    class MainActivity
+    class KaviApplication
+    class AppNavigation
+}
+
+' UI Layer
+package "UI" {
+    package "Screens" {
+        class "Main Screens" as MainScreens
+        class "Game Boards" as GameBoards
+        class "Auth Screens" as AuthScreens
+    }
+}
+
+' ViewModel Layer
+package "ViewModels" {
+    class AppViewModel
+    class GameViewModel
+    class AuthViewModels
+}
+
+' Manager Layer
+package "Managers" {
+    package "Game Logic" {
+        class "Game Managers" as GameManagers
+        note right: PigGame, GreedGame,\nBalutGame, CustomGame
+    }
+
+    package "App Services" {
+        class StatisticsManager
+        class SettingsManager
+        class DiceManager
+    }
+}
+
+' Repository Layer
+package "Repositories" {
+    interface AuthRepository
+    interface UserRepository
+    interface LeaderboardRepository
+    interface StatisticsRepository
+}
+
+' High-level relationships
+MainActivity --> KaviApplication
+MainActivity --> AppNavigation
+
+' Navigation
+AppNavigation ..> MainScreens : routes
+AppNavigation ..> GameBoards : routes
+AppNavigation ..> AuthScreens : routes
+
+' Screen to ViewModel
+MainScreens ..> AppViewModel : uses
+GameBoards ..> GameViewModel : uses
+AuthScreens ..> AuthViewModels : uses
+
+' ViewModel to Managers
+GameViewModel *-- GameManagers : owns
+GameViewModel *-- DiceManager : owns
+GameViewModel *-- StatisticsManager : uses
+AppViewModel *-- SettingsManager : owns
+
+' ViewModels to Repositories
+AppViewModel ..> AuthRepository : uses
+AppViewModel ..> UserRepository : uses
+GameViewModel ..> LeaderboardRepository : uses
+AuthViewModels ..> AuthRepository : uses
+
+' Managers to Repositories
+StatisticsManager ..> StatisticsRepository : uses
+StatisticsManager ..> UserRepository : uses
+
+' Layer notes
+note "UI Components\nComposable functions" as N1
+note "State Management\nBusiness Logic" as N2
+note "Game Rules\nData Operations" as N3
+note "Data Access Layer" as N4
+
+Screens .. N1
+ViewModels .. N2
+Managers .. N3
+Repositories .. N4
+
+@enduml

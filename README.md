@@ -67,12 +67,6 @@ A strategic dice game similar to Yahtzee:
 ./gradlew test
 ```
 
-### Documentation
-Documentation is generated using Dokka. Generate documentation with:
-```bash
-./gradlew dokkaHtml
-```
-
 ## Contributing
 
 1. Fork the repository

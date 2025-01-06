@@ -28,8 +28,8 @@ class AppViewModel @Inject constructor(
 
     private val diceDataStore = DataStoreManager.getInstance(context)
 
-    private val _userProfileState = MutableStateFlow<Result<UserProfile>>(Loading())
-    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState
+    private val _userProfileState = MutableStateFlow<Result<UserProfile>>(Result.Loading())
+    val userProfileState: StateFlow<Result<UserProfile>> = _userProfileState.asStateFlow()
 
     private val _isUserSignedIn = MutableStateFlow(authRepository.isUserSignedIn())
     val isUserSignedIn: StateFlow<Boolean> = _isUserSignedIn.asStateFlow()
@@ -37,9 +37,16 @@ class AppViewModel @Inject constructor(
     private val _loginComplete = MutableStateFlow(false)
     val loginComplete: StateFlow<Boolean> = _loginComplete.asStateFlow()
 
+    private val _modelRetrainingStatus = MutableStateFlow<String?>(null)
+    val modelRetrainingStatus: StateFlow<String?> = _modelRetrainingStatus.asStateFlow()
+
     init {
         viewModelScope.launch {
             loadUserProfile()
+            // Listen for model retraining updates
+            statisticsManager.modelTrainingStatus.collect { status ->
+                _modelRetrainingStatus.value = status
+            }
         }
     }
 
@@ -51,6 +58,7 @@ class AppViewModel @Inject constructor(
     fun loadUserProfile() {
         viewModelScope.launch {
             _userProfileState.value = Loading()
+            _modelRetrainingStatus.value = null
             val userId = userRepository.getCurrentUserId()
 
             if (userId != null) {
@@ -71,21 +79,12 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun onLoginComplete() {
-        _loginComplete.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            userRepository.setUserOnlineStatus(true)
-            loadUserProfile()
-        }
-    }
-
-    fun onSignInStateChange() {
-        _isUserSignedIn.value = authRepository.isUserSignedIn()
-        if (!_isUserSignedIn.value) {
-            _loginComplete.value = false
-            _userProfileState.value = Error("Not logged in")
-        } else {
-            loadUserProfile()
+    fun onSignInComplete() {
+        viewModelScope.launch {
+            _userProfileState.value = Loading()
+            delay(500) // Give time for Firebase to complete its operations
+            loadUserProfile() // Reload profile after sign-in
+            _loginComplete.value = true
         }
     }
 

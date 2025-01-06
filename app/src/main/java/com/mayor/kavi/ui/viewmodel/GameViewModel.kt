@@ -11,6 +11,7 @@ import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.data.manager.games.*
 import com.mayor.kavi.data.repository.UserRepository
 import com.mayor.kavi.data.repository.LeaderboardRepository
+import com.mayor.kavi.game.BalutGameManager
 import com.mayor.kavi.util.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -73,10 +74,7 @@ class GameViewModel @Inject constructor(
     private val _showWinDialog = MutableStateFlow(false)
 
     // Settings & Board Selection
-    private val _vibrationEnabled = MutableStateFlow(true)
-
-    /** Whether vibration feedback is enabled */
-    val vibrationEnabled: StateFlow<Boolean> = _vibrationEnabled.asStateFlow()
+    private val _vibrationEnabled = MutableStateFlow(false)
 
     private val _boardColor = MutableStateFlow("")
 
@@ -97,14 +95,14 @@ class GameViewModel @Inject constructor(
                     _isNetworkConnected.value = isConnected
                 }
             }
-            launch {
-                diceDataStore.getVibrationEnabled()
-                    .collect { enabled -> _vibrationEnabled.value = enabled }
-            }
+            // Load vibration setting first
+            diceDataStore.getVibrationEnabled()
+                .collect { enabled -> _vibrationEnabled.value = enabled }
+
+            setSelectedBoard(GameBoard.PIG.modeName)
+            getBoardColor()
+            resetGame()
         }
-        setSelectedBoard(GameBoard.PIG.modeName)
-        getBoardColor()
-        resetGame()
     }
 
     /**
@@ -153,16 +151,15 @@ class GameViewModel @Inject constructor(
         if (isRolling.value || !isRollAllowed.value) return
         viewModelScope.launch {
             _isLoading.value = true
-                    val results = diceManager.rollDiceForBoard(_selectedBoard.value)
-                    // Only provide haptic feedback if vibration is enabled
-                    if (vibrationEnabled.value) {
-                        provideHapticFeedback()
-                    }
-                    // Process game state after rolling
-                    val newState = processGameState(results)
-                    _gameState.value = newState
-                }
-
+            val results = diceManager.rollDiceForBoard(_selectedBoard.value)
+            // Only provide haptic feedback if vibration is enabled
+            if (_vibrationEnabled.value) {
+                provideHapticFeedback()
+            }
+            // Process game state after rolling
+            val newState = processGameState(results)
+            _gameState.value = newState
+        }
     }
 
     /**
@@ -178,13 +175,7 @@ class GameViewModel @Inject constructor(
     }
 
     /**
-     * Determines if the AI should bank its current score.
-     *
-     * Decision is based on:
-     * - Current turn score
-     * - AI's total score
-     * - Player's total score
-     * - Game variant specific rules
+     * Determines if the AI should bank based on the current game variant
      *
      * @param currentTurnScore Points accumulated in current turn
      * @param aiTotalScore AI's total score
@@ -192,11 +183,18 @@ class GameViewModel @Inject constructor(
      * @return true if AI should bank, false to continue rolling
      */
     fun shouldAIBank(currentTurnScore: Int, aiTotalScore: Int, playerTotalScore: Int): Boolean {
-        return statisticsManager.shouldAIBank(
-            currentTurnScore = currentTurnScore,
-            aiTotalScore = aiTotalScore,
-            playerTotalScore = playerTotalScore
-        )
+        return when (_selectedBoard.value) {
+            GameBoard.PIG.modeName -> pigGameManager.shouldAIBank(
+                currentTurnScore = currentTurnScore,
+                aiTotalScore = aiTotalScore,
+                playerTotalScore = playerTotalScore
+            )
+            GameBoard.GREED.modeName -> greedGameManager.shouldAIBank(
+                currentTurnScore = currentTurnScore,
+                aiTotalScore = aiTotalScore
+            )
+            else -> false
+        }
     }
 
     fun setGameName(name: String) {
@@ -235,7 +233,7 @@ class GameViewModel @Inject constructor(
         val newState = greedGameManager.bankScore(currentState)
         _gameState.value = newState
         if (newState.isGameOver) {
-                _showWinDialog.value = true
+            _showWinDialog.value = true
             val playerScore = newState.playerScores[0] ?: 0
             val aiScore = newState.playerScores[AI_PLAYER_ID.hashCode()] ?: 0
             handleGameEnd(playerScore, playerScore > aiScore)
@@ -243,21 +241,16 @@ class GameViewModel @Inject constructor(
     }
 
     fun endBalutTurn(category: String) {
-        val balutState = (_gameState.value as? GameScoreState.BalutScoreState) ?: return
-        if (balutState.isGameOver) {
-            val playerScore = balutState.playerScores[0]?.values?.sum() ?: 0
-            val aiScore = balutState.playerScores[AI_PLAYER_ID.hashCode()]?.values?.sum() ?: 0
-            handleGameEnd(playerScore, playerScore > aiScore)
-        }
         val currentState = (_gameState.value as? GameScoreState.BalutScoreState) ?: return
         val dice = getCurrentRolls()
         val newState = balutGameManager.scoreCategory(currentState, dice, category)
-        
+
         _gameState.value = newState
         if (newState.isGameOver) {
             _showWinDialog.value = true
             val playerScore = newState.playerScores[0]?.values?.sum() ?: 0
             val aiScore = newState.playerScores[AI_PLAYER_ID.hashCode()]?.values?.sum() ?: 0
+            // Player wins if they have more points
             handleGameEnd(playerScore, playerScore > aiScore)
         }
     }
@@ -273,15 +266,18 @@ class GameViewModel @Inject constructor(
 
     fun resetGame() {
         viewModelScope.launch {
+            // Reset all game state first
+            _showWinDialog.value = false
+            _heldDice.value = emptySet()
+            diceManager.resetGame()
+
+            // Then initialize new game
             _gameState.value = when (GameBoard.valueOf(_selectedBoard.value.uppercase())) {
                 GameBoard.PIG -> pigGameManager.initializeGame()
                 GameBoard.GREED -> greedGameManager.initializeGame()
                 GameBoard.BALUT -> balutGameManager.initializeGame()
                 GameBoard.CUSTOM -> myGameManager.initializeGame()
             }
-            diceManager.resetGame()
-            _showWinDialog.value = false
-            _heldDice.value = emptySet()
         }
     }
 
@@ -377,63 +373,88 @@ class GameViewModel @Inject constructor(
         true
     )
 
-    private fun updateGameStatistics(score: Int, isWin: Boolean) {
-        viewModelScope.launch {
-            val gameMode = when (_gameState.value) {
-                is GameScoreState.PigScoreState -> GameBoard.PIG.modeName
-                is GameScoreState.GreedScoreState -> GameBoard.GREED.modeName
-                is GameScoreState.BalutScoreState -> GameBoard.BALUT.modeName
-                is GameScoreState.CustomScoreState -> GameBoard.CUSTOM.modeName
-                else -> return@launch
-            }
-            statisticsManager.updateGameStatistics(gameMode, score, isWin)
-        }
-    }
-
     private fun handleGameEnd(finalScore: Int, isWin: Boolean) {
-        updateGameStatistics(finalScore, isWin)
         viewModelScope.launch {
-            val currentUserId = userRepository.getCurrentUserId()?.toString() ?: run {
-                Timber.e("No current user ID available")
-                return@launch
-            }
+            try {
+                // Set game over state immediately to prevent further moves
+                _gameState.value = when (val currentState = _gameState.value) {
+                    is GameScoreState.PigScoreState -> currentState.copy(isGameOver = true)
+                    is GameScoreState.GreedScoreState -> currentState.copy(isGameOver = true)
+                    is GameScoreState.BalutScoreState -> currentState.copy(isGameOver = true)
+                    is GameScoreState.CustomScoreState -> currentState.copy(isGameOver = true)
+                    else -> return@launch
+                }
 
-            // Get current user profile
-            val currentUser = when (val result = userRepository.getCurrentUser()) {
-                is Result.Success -> result.data
-                else -> {
-                    Timber.e("Failed to get current user profile")
+                // Show win dialog after state is updated
+                _showWinDialog.value = true
+
+                val currentUserId = userRepository.getCurrentUserId()?.toString() ?: run {
+                    Timber.e("No current user ID available")
                     return@launch
                 }
-            }
 
-            // Update leaderboard entry
-            when (_gameState.value) {
-                is GameScoreState.PigScoreState, 
-                is GameScoreState.GreedScoreState,
-                is GameScoreState.BalutScoreState -> {
-                    try {
-                        val entry = LeaderboardEntry(
-                            userId = currentUserId,
-                            displayName = currentUser.name,
-                            score = finalScore,
-                            gamesPlayed = 1,
-                            gamesWon = if (isWin) 1 else 0,
-                            lastUpdated = System.currentTimeMillis()
-                        )
-                        leaderboardRepository.updateLeaderboardEntry(entry)
-                    } catch (e: Exception) {
-                        Timber.e(e, "Failed to update leaderboard: ${e.message}")
+                // Get current user profile
+                val currentUser = when (val result = userRepository.getCurrentUser()) {
+                    is Result.Success -> result.data
+                    else -> {
+                        Timber.e("Failed to get current user profile")
+                        return@launch
                     }
                 }
-                is GameScoreState.CustomScoreState -> {
-                    // Custom games are not tracked in leaderboards
+
+                // Update statistics and leaderboard in a single transaction
+                when (_gameState.value) {
+                    is GameScoreState.PigScoreState,
+                    is GameScoreState.GreedScoreState,
+                    is GameScoreState.BalutScoreState -> {
+                        val gameMode = when (_gameState.value) {
+                            is GameScoreState.PigScoreState -> GameBoard.PIG.modeName
+                            is GameScoreState.GreedScoreState -> GameBoard.GREED.modeName
+                            is GameScoreState.BalutScoreState -> GameBoard.BALUT.modeName
+                            else -> return@launch
+                        }
+
+                        // Update game statistics
+                        statisticsManager.updateGameStatistics(gameMode, finalScore, isWin)
+
+                        // Update leaderboard
+                        try {
+                            when (leaderboardRepository.getLeaderboard()) {
+                                is Result.Success -> {
+                                    val entry = LeaderboardEntry(
+                                        userId = currentUserId,
+                                        displayName = currentUser.name,
+                                        score = finalScore,
+                                        gamesPlayed = 1,
+                                        gamesWon = if (isWin) 1 else 0,
+                                        lastUpdated = System.currentTimeMillis()
+                                    )
+                                    leaderboardRepository.updateLeaderboardEntry(entry)
+                                }
+
+                                else -> Timber.e("Failed to get leaderboard")
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to update leaderboard: ${e.message}")
+                        }
+                    }
+
+                    is GameScoreState.CustomScoreState -> {
+                        val gameMode = GameBoard.CUSTOM.modeName
+                        statisticsManager.updateGameStatistics(gameMode, finalScore, isWin)
+                    }
                 }
+            } catch (e: Exception) {
+                Timber.e(e, "Error handling game end: ${e.message}")
             }
         }
     }
 
     private suspend fun processGameState(results: List<Int>): GameScoreState {
+        // Prevent processing if game is over
+        if (_gameState.value.isGameOver == true) {
+            return _gameState.value
+        }
         return when (val currentState = _gameState.value) {
             is GameScoreState.PigScoreState -> withContext(Dispatchers.Default) {
                 pigGameManager.handleTurn(currentState, results.firstOrNull())

@@ -1,5 +1,6 @@
 package com.mayor.kavi.authentication.signup
 
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mayor.kavi.data.repository.AuthRepository
@@ -30,7 +31,6 @@ class SignUpViewModel @Inject constructor(
     fun signUp(username: String, email: String, password: String) {
         // Validate input
         if (!validateInput(username, email, password)) return
-
         viewModelScope.launch {
             try {
                 repository.createUser(username, email, password).collect { result ->
@@ -44,30 +44,30 @@ class SignUpViewModel @Inject constructor(
                                 )
                                 return@collect
                             }
-
                             val userProfile = UserProfile(
                                 id = userId,
                                 name = username,
                                 email = email,
                                 avatar = Avatar.DEFAULT,
-                                lastSeen = System.currentTimeMillis()
+                                lastSeen = System.currentTimeMillis(),
+                                isOnline = true,
+                                isInGame = false,
+                                isWaitingForPlayers = false,
+                                currentGameId = ""
                             )
                             createUserProfile(userProfile)
-                            
                             // Show verification message
                             _signUpState.value = SignUpState(
                                 isLoading = false,
                                 toastMessage = "Account created successfully! Please check your email to verify your account before signing in."
                             )
                         }
-
                         is Error -> {
                             _signUpState.value = SignUpState(
                                 isLoading = false,
                                 toastMessage = "Sign-up failed: ${result.message}"
                             )
                         }
-
                         is Loading -> {
                             _signUpState.value = SignUpState(isLoading = true)
                         }
@@ -90,15 +90,13 @@ class SignUpViewModel @Inject constructor(
             )
             return false
         }
-
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             _signUpState.value = SignUpState(
                 isLoading = false,
                 toastMessage = "Invalid email format"
             )
             return false
         }
-
         if (password.length < 6) {
             _signUpState.value = SignUpState(
                 isLoading = false,
@@ -106,7 +104,6 @@ class SignUpViewModel @Inject constructor(
             )
             return false
         }
-
         return true
     }
 
@@ -120,7 +117,6 @@ class SignUpViewModel @Inject constructor(
                             toastMessage = "Sign-up successful"
                         )
                     }
-
                     is Error -> {
                         _signUpState.value = SignUpState(
                             isLoading = false,

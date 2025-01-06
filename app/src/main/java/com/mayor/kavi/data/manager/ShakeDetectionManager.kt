@@ -8,7 +8,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -17,7 +16,6 @@ import kotlin.math.sqrt
 class ShakeDetectionManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsManager: SettingsManager,
-    private val statisticsManager: StatisticsManager,
     @IoDispatcher private val dispatcher: CoroutineDispatcher
 ) {
     private val scope = CoroutineScope(dispatcher + SupervisorJob())

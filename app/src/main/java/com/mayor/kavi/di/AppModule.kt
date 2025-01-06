@@ -8,8 +8,8 @@ import com.mayor.kavi.data.manager.*
 import com.mayor.kavi.data.manager.games.*
 import com.mayor.kavi.data.repository.*
 import com.mayor.kavi.di.AppModule.GameScope
+import com.mayor.kavi.game.BalutGameManager
 import com.mayor.kavi.util.*
-import com.mayor.kavi.R
 import dagger.*
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -119,10 +119,9 @@ object AppModule {
     fun provideShakeDetectionService(
         @ApplicationContext context: Context,
         settingsManager: SettingsManager,
-        statisticsManager: StatisticsManager,
         @IoDispatcher dispatcher: CoroutineDispatcher
     ): ShakeDetectionManager =
-        ShakeDetectionManager(context, settingsManager, statisticsManager, dispatcher)
+        ShakeDetectionManager(context, settingsManager, dispatcher)
 
     @Provides
     @Singleton
@@ -135,13 +134,11 @@ object AppModule {
         @ApplicationContext context: Context,
         statisticsRepository: StatisticsRepository,
         userRepository: UserRepository,
-        applicationScope: CoroutineScope,
         @IoDispatcher dispatcher: CoroutineDispatcher
     ): StatisticsManager = StatisticsManager(
         context,
         statisticsRepository,
         userRepository,
-        applicationScope,
         dispatcher
     )
 
