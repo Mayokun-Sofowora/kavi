@@ -1,0 +1,77 @@
+@startuml game_flow
+
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+actor Player
+participant "MainMenu" as Menu
+participant "BoardSelection" as Board
+participant "GameScreen" as Game
+participant "GameViewModel" as GameVM
+participant "DiceManager" as DiceM
+participant "GameManager" as GameM
+participant "StatisticsManager" as Stats
+participant "ShakeDetectionManager" as ShakeM
+
+Player -> Menu: Start Game
+activate Menu
+Menu -> Board: Navigate to Board Selection
+deactivate Menu
+
+Player -> Board: Choose Game Variant
+activate Board
+Board -> GameVM: setSelectedBoard(variant)
+GameVM -> GameVM: resetGame()
+GameVM -> Stats: startGameTiming()
+GameVM -> GameM: initializeGame()
+GameM --> GameVM: Initial GameState
+Board -> Game: Navigate to Game Screen
+deactivate Board
+
+activate Game
+Game -> GameVM: Initialize UI State
+GameVM -> ShakeM: resumeShakeDetection()
+
+loop Game Round
+    alt Shake to Roll
+        ShakeM -> GameVM: onShake()
+        GameVM -> DiceM: rollDice()
+    else Manual Roll
+        Player -> Game: Tap Roll Button
+        Game -> GameVM: rollDice()
+        GameVM -> DiceM: rollDice()
+    end
+
+    DiceM --> GameVM: Dice Results
+    GameVM -> GameM: handleTurn(results)
+    GameM --> GameVM: Updated GameState
+    GameVM --> Game: Update UI
+
+    alt Player Holds Dice
+        Player -> Game: Toggle Dice Hold
+        Game -> GameVM: toggleDiceHold()
+        GameVM -> DiceM: toggleHold()
+    else Player Banks
+        Player -> Game: Bank Points
+        Game -> GameVM: bankScore()
+        GameVM -> GameM: bankScore()
+        GameM --> GameVM: Updated GameState
+        GameVM -> Stats: trackBanking()
+    end
+end
+
+alt Win Condition Met
+    GameVM -> GameVM: handleGameEnd()
+    GameVM -> Stats: updateGameStatistics()
+    GameVM -> Game: Show Win Dialog
+    Game --> Player: Display Results
+else Player Exits
+    Player -> Game: Exit Game
+    Game -> Stats: Save Progress
+    Game -> ShakeM: pauseShakeDetection()
+end
+
+deactivate Game
+
+@enduml

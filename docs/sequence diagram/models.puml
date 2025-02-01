@@ -1,0 +1,99 @@
+@startuml Models_Diagram
+
+' Styling
+skinparam class {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+    ArrowColor DarkSlateGray
+    FontSize 12
+    AttributeFontSize 12
+}
+
+skinparam arrow {
+    MessageAlign center
+    FontSize 12
+}
+
+' Core Game State
+class GameState {
+    + currentPlayerIndex: Int
+    + isGameOver: Boolean
+    + playerScores: Map<Int, Int>
+    + currentTurnScore: Int
+    + rollsLeft: Int
+    + heldDice: Set<Int>
+}
+
+' Statistics and Analysis
+class GameStatistics {
+    + gamesPlayed: Int
+    + highScores: Map<String, Int>
+    + winRates: Map<String, WinRate>
+    + lastSeen: Long
+}
+
+class PlayerAnalysis {
+    + predictedWinRate: Float
+    + consistency: Float
+    + playStyle: PlayStyle
+    + improvement: Float
+}
+
+class DecisionPatterns {
+    + averageRollsPerTurn: Float
+    + bankingThreshold: Float
+    + riskTaking: Float
+    + decisionSpeed: Float
+}
+
+class WinRate {
+    + wins: Int
+    + total: Int
+    + getWinPercentage(): Float
+}
+
+class TimeMetrics {
+    + averageGameDuration: Long
+    + averageTurnDuration: Long
+    + fastestGame: Long
+    + totalPlayTime: Long
+}
+
+class PerformanceMetrics {
+    + currentStreak: Int
+    + longestStreak: Int
+    + comebacks: Int
+    + closeGames: Int
+    + personalBests: Map<String, Int>
+    + averageScoreByMode: Map<String, Float>
+}
+
+' Detection Related
+class Detection {
+    + boundingBox: RectF
+    + label: String
+    + confidence: Float
+}
+
+class DiceDetectionResult {
+    + detections: List<Detection>
+    + timestamp: Long
+    + isValid(): Boolean
+}
+
+class DetectionRequest {
+    + imageData: ByteArray
+    + getImageBytes(): ByteArray
+}
+
+' Relationships
+GameStatistics "1" --* "0..1" PlayerAnalysis : <<owns >>
+PlayerAnalysis "1" --* "1" DecisionPatterns : <<contains >>
+PlayerAnalysis "1" --* "1" TimeMetrics : <<contains >>
+PlayerAnalysis "1" --* "1" PerformanceMetrics : <<contains >>
+GameStatistics "1" o-- "0..*" WinRate : <<tracks >>
+DetectionRequest ..> "0..1" DiceDetectionResult : <<contains >>
+DiceDetectionResult "1" --* "1..*" Detection: <<produces>>
+GameState "1" ..> "0..*" Detection : <<uses >>
+
+@enduml 

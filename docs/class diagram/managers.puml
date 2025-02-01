@@ -1,0 +1,94 @@
+@startuml Manager_Diagram
+
+' Force vertical layout
+left to right direction
+'skinparam linetype polyline
+'skinparam handwritten true
+
+' General styling
+'skinparam packageStyle node
+skinparam Padding 1
+skinparam ParticipantPadding 0
+skinparam ComponentPadding 0
+skinparam nodesep 3
+skinparam ranksep 3
+skinparam class {
+    BackgroundColor LightGreen
+    BorderColor Black
+    ArrowColor Black
+}
+
+' Core Game Managers
+package "Managers" #LightYellow {
+    class MyGameManager
+    class PigGameManager
+    class GreedGameManager
+    class BalutGameManager
+
+    class DiceManager
+    class DataStoreManager
+    class StatisticsManager
+    class SettingsManager
+    class ShakeDetectorManager
+}
+
+' Models
+package "Models" #LightGray {
+    class GameState
+    class GameStatistics
+    class PlayerAnalysis
+    class DecisionPatterns
+    class WinRate
+    class TimeMetrics
+    class DiceDetectionResult
+}
+
+' ViewModels
+package "ViewModels" #LightCyan {
+    class AppViewModel
+    class GameViewModel
+    class DetectionViewModel
+}
+
+' Data Components
+package "Data Components" #LightBlue {
+    interface StatisticsRepository
+    class StatisticsRepositoryImpl implements StatisticsRepository
+
+    interface RoboflowRepository
+    class RoboflowRepositoryImpl implements RoboflowRepository
+}
+
+' Relationships with one-word labels
+AppViewModel --> DataStoreManager : "Manage"
+GameViewModel --> MyGameManager : "Use"
+GameViewModel --> PigGameManager : "Use"
+GameViewModel --> GreedGameManager : "Use"
+GameViewModel --> BalutGameManager : "Use"
+GameViewModel --> DiceManager : "Roll"
+GameViewModel --> StatisticsManager : "Analyze"
+GameViewModel --> SettingsManager : "Access"
+GameViewModel --> ShakeDetectorManager : "Detect"
+
+StatisticsManager --> StatisticsRepository : "Store"
+StatisticsRepositoryImpl --> GameStatistics : "Provide"
+StatisticsRepositoryImpl --> PlayerAnalysis : "Analyze"
+StatisticsRepositoryImpl --> DecisionPatterns : "Predict"
+StatisticsRepositoryImpl --> WinRate : "Calculate"
+StatisticsRepositoryImpl --> TimeMetrics : "Track"
+
+DetectionViewModel --> DiceDetectionResult : "Detect"
+DetectionViewModel --> RoboflowRepository : "Use"
+RoboflowRepositoryImpl --> DiceDetectionResult : "Analyze"
+
+MyGameManager --> GameState : "Manage"
+PigGameManager --> GameState : "Manage"
+GreedGameManager --> GameState : "Manage"
+BalutGameManager --> GameState : "Manage"
+
+MyGameManager --> PlayerAnalysis : "Analyze"
+PigGameManager --> PlayerAnalysis : "Analyze"
+GreedGameManager --> PlayerAnalysis : "Analyze"
+BalutGameManager --> PlayerAnalysis : "Analyze"
+
+@enduml

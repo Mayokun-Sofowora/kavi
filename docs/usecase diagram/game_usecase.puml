@@ -1,0 +1,46 @@
+@startuml game_usecase
+left to right direction
+skinparam packageStyle rectangle
+skinparam UseCaseBackgroundColor #E8F8F5
+'skinparam linetype polyline
+skinparam handwritten true
+
+actor Player as player
+actor AI as ai
+
+rectangle "Dice Game System" {
+    usecase "Play Classic Game" as UC1
+    usecase "Play Custom Game" as UC4
+    usecase "Roll Dice" as UC5
+    usecase "Hold Dice" as UC6
+    usecase "Bank Score" as UC7
+    usecase "Earn Achievements" as UC9
+    usecase "Use Virtual Mode" as UC10
+    usecase "Capture Dice Image" as UC11
+    usecase "Detect Dice Values" as UC12
+    usecase "View Game Rules" as UC13
+    usecase "Toggle Settings" as UC14
+    usecase "Make Strategic Decisions" as UC15
+}
+
+player -- UC1
+player -- UC4
+player -- UC10
+player -- UC13
+player -- UC14
+
+ai -- UC5
+ai -- UC6
+ai -- UC7
+ai -- UC15
+
+UC1 ..> UC5 : includes
+UC1 ..> UC6 : includes
+UC1 ..> UC7 : includes
+UC1 ..> UC9 : extends
+UC4 ..> UC5 : includes
+
+UC10 ..> UC11 : includes
+UC10 ..> UC12 : includes
+
+@enduml

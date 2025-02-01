@@ -1,0 +1,79 @@
+@startuml package_structure
+
+' Styling
+'skinparam packageStyle rectangle
+skinparam Padding 2
+skinparam ParticipantPadding 0
+skinparam ComponentPadding 0
+skinparam nodesep 10
+skinparam ranksep 10
+skinparam defaultFontSize 12
+skinparam backgroundColor white
+skinparam packageBackgroundColor #FEFEEE
+skinparam packageBorderColor #000000
+
+' Main Application
+package "kavi" {
+    class KaviApplication
+    class MainActivity
+
+    ' Data Layer
+    package "data" {
+        package "models" {
+            note "Game states\nGame statistics\nDetection models\nEnums" as N1
+        }
+        
+        package "manager" {
+            package "games" {
+                note "PigGameManager\nGreedGameManager\nBalutGameManager\nMyGameManager" as N2
+            }
+            note "DiceManager\nStatisticsManager\nSettingsManager" as N3
+        }
+        
+        package "repository" {
+            note "RoboflowRepository\nStatisticsRepository" as N4
+        }
+        
+        package "service" {
+            note "GameTracker\nRoboflowService" as N5
+        }
+    }
+
+    ' UI Layer
+    package "ui" {
+        package "screens" {
+            note "GameScreen\nVirtualModeScreen\nStatisticsScreen\nSettingsScreen" as N6
+        }
+        
+        package "components" {
+            note "DrawDetectionBox\nDiceGrid\nGameControls\nDialogs" as N7
+        }
+        
+        package "viewmodel" {
+            note "GameViewModel\nDetectionViewModel\nStatisticsViewModel" as N8
+        }
+        
+        package "theme" {
+            note "Colors\nTypography\nTheme" as N9
+        }
+        
+        class AppNavigation
+    }
+
+    ' Dependency Injection
+    package "di" {
+        note "AppModule\nGameModule" as N10
+    }
+
+    ' Utilities
+    package "util" {
+        note "ScoreCalculator\nConstants\nExtensions" as N11
+    }
+}
+
+' Layout Hints
+data -[hidden]down- ui
+ui -[hidden]right- di
+di -[hidden]down- util
+
+@enduml 

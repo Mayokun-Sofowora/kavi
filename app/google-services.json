@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "111369795081",
+    "firebase_url": "https://kavi-a4f55-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "kavi-a4f55",
+    "storage_bucket": "kavi-a4f55.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111369795081:android:fb2d15ff98fcac775cead8",
+        "android_client_info": {
+          "package_name": "com.mayor.kavi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "111369795081-okmhjjdapjgltmvm347ds9qcpo4dskn2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mayor.kavi",
+            "certificate_hash": "33b4a906f937cb75fcc6939b0e8121128f800cff"
+          }
+        },
+        {
+          "client_id": "111369795081-n6j6to7me1m64rspc7ai09e7l2u89l4o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBism-bUKJfDkxr41QKXDV3jgbf-hUBhqY"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "111369795081-n6j6to7me1m64rspc7ai09e7l2u89l4o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

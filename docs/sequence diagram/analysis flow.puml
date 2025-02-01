@@ -1,0 +1,69 @@
+@startuml analysis_flow
+
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 20
+
+actor Player
+participant "StatisticsScreen" as StatsUI
+participant "AnalyticsDashboard" as Dashboard
+participant "StatisticsManager" as Stats
+participant "StatisticsRepository" as Repo
+participant "DataStore" as Store
+
+Player -> StatsUI: View Statistics
+activate StatsUI
+
+StatsUI -> Dashboard: Initialize Dashboard
+activate Dashboard
+
+Dashboard -> Stats: collectAsState(gameStatistics)
+activate Stats
+
+Stats -> Store: Load stored statistics
+Store --> Stats: Stored data
+
+Stats -> Stats: loadGameStatistics()
+Stats -> Stats: updatePlayerAnalysis()
+note right
+  - Calculate win rates
+  - Determine play style
+  - Process performance metrics
+  - Track achievements
+  - Analyze decision patterns
+  - Update time metrics
+end note
+
+Stats --> Dashboard: Emit statistics updates
+deactivate Stats
+
+Dashboard -> Dashboard: Update UI components
+note right
+  - Performance Card
+  - Time Analytics Card
+  - Decision Patterns Card
+  - Achievements Card
+end note
+
+alt Clear Statistics
+    Player -> StatsUI: Reset Statistics
+    StatsUI -> Stats: clearAllData()
+    activate Stats
+    Stats -> Store: Clear stored data
+    Stats -> Repo: clearUserStatistics()
+    Stats -> Stats: Reset local state
+    deactivate Stats
+end
+
+Player -> Dashboard: View detailed metrics
+Dashboard -> Dashboard: Show specific analytics
+note right
+  - Risk taking levels
+  - Average rolls per turn
+  - Banking thresholds
+  - Achievement progress
+end note
+
+deactivate Dashboard
+deactivate StatsUI
+
+@enduml

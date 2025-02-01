@@ -1,0 +1,69 @@
+@startuml virtual_mode_flow
+
+skinparam packageStyle rectangle
+skinparam UseCaseBackgroundColor #E8F8F5
+
+actor Player
+participant "VirtualModeScreen" as VMS
+participant "CameraPreview" as CP
+participant "DetectionViewModel" as DVM
+participant "RoboflowRepository" as RR
+participant "RoboflowService" as RS
+
+Player -> VMS: Opens virtual mode
+activate VMS
+
+VMS -> CP: Initialize camera preview
+CP -> VMS: Request camera permissions
+VMS -> Player: Show camera preview
+
+Player -> VMS: Tap capture button
+VMS -> CP: takePicture()
+CP --> VMS: onCaptureSuccess(ImageProxy)
+VMS -> VMS: Convert to Bitmap
+
+VMS -> DVM: detectDice(bitmap)
+activate DVM
+DVM -> DVM: Set state to Processing
+DVM -> RR: detectDice(bitmap)
+activate RR
+
+RR -> RR: Preprocess image
+RR -> RR: Apply contrast enhancement
+RR -> RR: Scale to 640x640
+RR -> RS: detectDice(apiKey, image)
+activate RS
+
+RS --> RR: Return predictions
+deactivate RS
+
+RR -> RR: Map predictions to detections
+RR -> RR: Filter low confidence (<40%)
+RR --> DVM: Return detections
+deactivate RR
+
+alt Detections Found
+    DVM -> DVM: Update state to Success
+else No Detections
+    DVM -> DVM: Update state to NoDetections
+else Error Occurs
+    DVM -> DVM: Update state to Error
+end
+
+DVM --> VMS: Emit state
+deactivate DVM
+
+VMS -> VMS: Draw detection boxes
+VMS -> Player: Show detection results
+
+alt Player retakes
+    Player -> VMS: Click Retake
+    VMS -> VMS: Recycle bitmap
+    VMS -> DVM: clearDetections()
+    VMS -> CP: Reset camera
+    VMS -> Player: Show camera preview
+end
+
+deactivate VMS
+
+@enduml
