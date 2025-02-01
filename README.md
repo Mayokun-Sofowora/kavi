@@ -31,7 +31,7 @@ A strategic dice game similar to Yahtzee:
 - 🤖 Adaptive AI opponent with dynamic difficulty
 - 📊 Comprehensive statistics tracking
 - 🎮 Intuitive touch and shake controls
-- 🎨 Customizable interface themes
+- 🌟 Customizable interface themes
 - 📱 Modern Material Design 3 UI
 
 ## Technical Details
@@ -54,6 +54,26 @@ A strategic dice game similar to Yahtzee:
 2. Open in Android Studio
 3. Sync Gradle dependencies
 4. Run on an Android device/emulator (min SDK 30)
+
+## API Configuration (Roboflow)
+
+If the Roboflow API key is ignored in the release build, you can retrieve and provide it manually:
+
+1. **Sign in to Roboflow** at [https://roboflow.com/](https://roboflow.com/).
+2. Navigate to your **Project Dashboard**.
+3. Locate the **API Key** under the "Settings" or "Security" section.
+4. Add the key manually to your local `gradle.properties` file:
+   ```properties
+   ROBOFLOW_API_KEY=your_api_key_here
+   ```
+5. In your `local.properties` (not committed to version control), reference it in `build.gradle`:
+   ```gradle
+   buildConfigField "String", "ROBOFLOW_API_KEY", '"' + ROBOFLOW_API_KEY + '"'
+   ```
+6. Access the API key in your code safely using:
+   ```kotlin
+   val apiKey = BuildConfig.ROBOFLOW_API_KEY
+   ```
 
 ## Development
 
@@ -92,4 +112,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Material Design 3 for UI components
 - Jetpack Compose for modern UI toolkit
-- Android Architecture Components 
+- Android Architecture Components
+
