@@ -1,4 +1,8 @@
 # Kavi - Multi-variant Dice Game
+![classic boards](https://github.com/user-attachments/assets/ed995789-e23b-441b-a128-05c2a9f64f8f)
+![balut board](https://github.com/user-attachments/assets/fa2d1da7-56fc-442f-b002-55c76ef40208)
+![greed board](https://github.com/user-attachments/assets/e118826f-6be8-4fdd-b0b1-1add523a49bc)
+![pig board](https://github.com/user-attachments/assets/ecd50679-990b-424b-9a5c-5f944457f7ff)
 
 A modern Android dice game application implementing multiple classic and custom dice game variants with AI opponents. Built using Jetpack Compose and following clean architecture principles.
 
