@@ -114,3 +114,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Jetpack Compose for modern UI toolkit
 - Android Architecture Components
 
+## About
+For detailed documentation, including the project description, installation guidelines, user manual, and additional technical insights, refer to the accompanying thesis available in the Mayokun-Sofowora/kavi-docs repository.
+
