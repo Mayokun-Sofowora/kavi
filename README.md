@@ -6,6 +6,12 @@
 
 A modern Android dice game application implementing multiple classic and custom dice game variants with AI opponents. Built using Jetpack Compose and following clean architecture principles.
 
+| **Dice Recognition Demo** |
+|---------------------------|
+| ![Kavi Dice Image Recognition](https://github.com/user-attachments/assets/fd90c549-47dc-493e-b100-d6f9960109ba) |
+
+With Dice Image recognition.
+
 ## Game Variants
 
 ### 1. Pig
@@ -37,12 +43,7 @@ A strategic dice game similar to Yahtzee:
 - 🎮 Intuitive touch and shake controls
 - 🌟 Customizable interface themes
 - 📱 Modern Material Design 3 UI
-- 🔍 **Dice Image Recognition** for real-world dice integration
-
-| **Dice Recognition Demo** |
-|---------------------------|
-| ![Kavi Dice Image Recognition](https://github.com/user-attachments/assets/fd90c549-47dc-493e-b100-d6f9960109ba) |
-
+- 🔍 Dice Image Recognition for real-world dice integration
 
 ## Technical Details
 
