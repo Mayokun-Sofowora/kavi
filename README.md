@@ -122,5 +122,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Android Architecture Components
 
 ## About
-For detailed documentation, including the project description, installation guidelines, user manual, and additional technical insights, refer to the accompanying thesis available in the [Mayokun-Sofowora/kavi-docs](https://github.com/Mayokun-Sofowora/kavi-docs) repository.
+For detailed documentation, including the project description, installation guidelines, user manual, and additional technical insights, refer to the accompanying thesis available in the [Mayokun-Sofowora/kavi-documentation](https://github.com/Mayokun-Sofowora/kavi-documentation) repository.
 
