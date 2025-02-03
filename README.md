@@ -57,8 +57,8 @@ A strategic dice game similar to Yahtzee:
 - GameManagers: Handle game logic and state management
 - ScoreCalculator: Processes dice combinations and scoring
 - StatisticsManager: Tracks game statistics and player behavior
-- AI Implementation: Adaptive opponent with strategic decision making
-- **Image Recognition System**: Detects pips and numbers on physical dice
+- AI Implementation: Adaptive opponent with strategic decision-making
+- Image Recognition System: Detects pips and numbers on physical dice
 
 ## Setup and Installation
 
