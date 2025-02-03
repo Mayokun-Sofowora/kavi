@@ -4,9 +4,6 @@
 |--------------|------------|-------------|----------|
 | ![statistics screen3](https://github.com/user-attachments/assets/719f4407-83d7-42b0-91b9-c53b0c0c7188) | ![Balut Board](https://github.com/user-attachments/assets/fa2d1da7-56fc-442f-b002-55c76ef40208) | ![Greed Board](https://github.com/user-attachments/assets/e118826f-6be8-4fdd-b0b1-1add523a49bc) | ![Pig Board](https://github.com/user-attachments/assets/ecd50679-990b-424b-9a5c-5f944457f7ff) |
 
-
-
-
 A modern Android dice game application implementing multiple classic and custom dice game variants with AI opponents. Built using Jetpack Compose and following clean architecture principles.
 
 ## Game Variants
@@ -40,6 +37,12 @@ A strategic dice game similar to Yahtzee:
 - 🎮 Intuitive touch and shake controls
 - 🌟 Customizable interface themes
 - 📱 Modern Material Design 3 UI
+- 🔍 **Dice Image Recognition** for real-world dice integration
+
+| **Dice Recognition Demo** |
+|---------------------------|
+| ![Kavi Dice Image Recognition](https://github.com/user-attachments/assets/fd90c549-47dc-493e-b100-d6f9960109ba) |
+
 
 ## Technical Details
 
@@ -54,6 +57,7 @@ A strategic dice game similar to Yahtzee:
 - ScoreCalculator: Processes dice combinations and scoring
 - StatisticsManager: Tracks game statistics and player behavior
 - AI Implementation: Adaptive opponent with strategic decision making
+- **Image Recognition System**: Detects pips and numbers on physical dice
 
 ## Setup and Installation
 
